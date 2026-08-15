@@ -19,6 +19,24 @@
   gap: 8px;
 }
 
+/* Narrow columns: the strip's fixed controls no longer fit the toolbar row,
+   so the row scrolls horizontally instead of crushing the search capsule
+   into a sliver (or letting the row overflow the column's edge). */
+@media (max-width: 560px) {
+  .inner {
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .inner::-webkit-scrollbar {
+    display: none;
+  }
+
+  .search {
+    flex: none;
+  }
+}
+
 .actions {
   display: flex;
   flex: none;

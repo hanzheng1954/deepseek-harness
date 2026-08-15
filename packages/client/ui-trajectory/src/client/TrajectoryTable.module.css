@@ -776,7 +776,7 @@
   display: grid;
   grid-template-columns:
     clamp(
-      180px,
+      96px,
       var(--trajectory-tool-request-width, calc(36cqw - 56px)),
       480px
     )

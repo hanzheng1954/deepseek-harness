@@ -23,3 +23,11 @@
   color: var(--dsw-alias-separator-primary);
   margin: 0 10px; /* carries the former flex gap */
 }
+
+/* Narrow columns: one nowrap line would ellipsize away most of the session
+   stats, so the line wraps instead and the whole reading stays visible. */
+@media (max-width: 720px) {
+  .root {
+    white-space: normal;
+  }
+}
