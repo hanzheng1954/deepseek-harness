@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-本包渲染 Web GUI 的后台任务界面：一个会话头部动作，打开后以弹层列出本会话可见的任务。它经运行时提供的 `jobsBySession` 镜像读取宿主计算的注册表状态，自身不发任何 RPC。触发器只在会话至少有一个任务时出现，角标计数运行中与停止中的任务；终态行保持可见并弱化，直到注册表把它们丢弃。模型对同一批任务的视角属于 `dsh-tool-jobs`；本包是给人类看的只读投影。
+本包渲染 Web GUI 的后台任务界面：一个会话头部动作，打开后以弹层列出本会话可见的任务。它经运行时提供的 `jobsBySession` 镜像读取宿主计算的注册表状态，自身不发任何 RPC。触发器只在会话存在运行中或停止中的任务时出现，角标计数这些活跃任务；终态行只在仍有活跃任务时保持可见并弱化。最后一个活跃任务结束时，控件会先关闭再卸载，因为持久结果属于会话中的工具行。模型对同一批任务的视角属于 `dsh-tool-jobs`；本包是给人类看的只读投影。
 
 ## 目录
 
@@ -25,11 +25,11 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-与运行时一起挂载本插件；只要会话至少有一个任务，任务动作就会出现在会话头部。点击打开弹层：活跃行在前按开始时间升序，随后终态行按结束时间降序，每行显示生产者 kind、标签、状态，以及一个活跃时每秒跳动、完成后冻结的已耗时。
+与运行时一起挂载本插件；只要会话至少有一个活跃任务，任务动作就会出现在会话头部。点击打开弹层：活跃行在前按开始时间升序，随后终态行按结束时间降序，每行显示生产者 kind、标签、状态，以及一个活跃时每秒跳动、完成后冻结的已耗时。最后一个活跃任务结束时，终态行会随控件一起消失。
 
 ### 关闭与边界
 
-Escape 关闭列表并把焦点交还触发器，在其外部按下指针同理。列表展示的是「一个会话通过协议视图能看到什么」，因此别的会话拥有的任务在这里永不出现；进程重启会清空列表，而 transcript（文本记录）里启动这些任务的 `run_in_background` 卡片仍在。
+Escape 关闭列表并把焦点交还触发器，在其外部按下指针同理。最后一个活跃任务结束时，列表会在控件卸载前关闭，焦点不会停留在已经移除的触发器上。列表展示的是「一个会话通过协议视图能看到什么」，因此别的会话拥有的任务在这里永不出现；进程重启会清空列表，而 transcript（文本记录）里启动这些任务的 `run_in_background` 卡片仍在。
 
 -----
 
@@ -39,7 +39,7 @@ Escape 关闭列表并把焦点交还触发器，在其外部按下指针同理�
 <details>
 <summary>实现细节——点击展开</summary>
 
-本包向 `conversation.session.header.actions` 贡献一个条目（`JobListAction`），数据完全来自会话控制器绑定从 `session/jobs` 帧折叠出的 `jobsBySession` 列表镜像——不发 RPC，除弹层开合外不持有任何状态。角标计数 `running` 加 `stopping`，为零时省略。行序为活跃行在前按 `startedAt` 升序、终态行按 `finishedAt` 降序，毫秒并列按启动顺序打破；缺少 `finishedAt` 的终态行读作零而不是负数，超过一小时的耗时停留在小时单位。终态行保持可见，因为失败任务的 `detail` 是其失败唯一可读之处。行为由 [Web 后台任务展示 Agent Note](../../../.agents/notes/implemented/feature/2026-08-08-web-background-job-display.zh.md) 规定。
+本包向 `conversation.session.header.actions` 贡献一个条目（`JobListAction`），数据完全来自会话控制器绑定从 `session/jobs` 帧折叠出的 `jobsBySession` 列表镜像——不发 RPC，除弹层开合外不持有任何状态。角标计数 `running` 加 `stopping`；计数为零时会卸载整个条目。行序为活跃行在前按 `startedAt` 升序、终态行按 `finishedAt` 降序，毫秒并列按启动顺序打破；缺少 `finishedAt` 的终态行读作零而不是负数，超过一小时的耗时停留在小时单位。行为由 [Web 后台任务展示 Agent Note](../../../.agents/notes/implemented/feature/2026-08-08-web-background-job-display.zh.md) 规定，只有活跃时显示触发器的生命周期由[任务角标生命周期 note](../../../.agents/notes/implemented/bug-fix/2026-08-15-job-badge-hides-when-idle.zh.md)规定。
 
 </details>
 

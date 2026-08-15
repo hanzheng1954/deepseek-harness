@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-15-job-badge-hides-when-idle.md
+2026-08-15-job-badge-hides-when-idle.md: 94f21a9fa98ef967acb08814a9ccb2bac5099202
+2026-08-15-job-badge-hides-when-idle.zh.md: ae9f6a28faed23fc5e96edd27e87970678584eba

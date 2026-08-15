@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-This package renders the background-job surface of the Web GUI: a session-header action that opens a popover listing the jobs this session can see. It reads host-computed registry state through the runtime's `jobsBySession` mirror and issues no RPC of its own. The trigger appears only when the session has at least one job, with a badge counting running and stopping jobs; settled rows stay visible and de-emphasized until the registry drops them. The model's own view of the same jobs belongs to `dsh-tool-jobs`; this package is a read-only projection for the human.
+This package renders the background-job surface of the Web GUI: a session-header action that opens a popover listing the jobs this session can see. It reads host-computed registry state through the runtime's `jobsBySession` mirror and issues no RPC of its own. The trigger appears only while the session has a running or stopping job, and its badge counts those live jobs; settled rows remain visible and de-emphasized only alongside live work. The last live job settling closes and unmounts the control, because the conversation's tool row owns the durable outcome. The model's view of the same jobs belongs to `dsh-tool-jobs`; this package is a read-only projection for the human.
 
 ## Table of Contents
 
@@ -25,11 +25,11 @@ This package renders the background-job surface of the Web GUI: a session-header
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount this plugin alongside the runtime; the job action then appears in the session header whenever the session has at least one job. A click opens the popover: live rows first by start time, then settled rows by finish time, each showing the producer kind, label, status, and an elapsed duration that ticks once per second while live and freezes at completion.
+Mount this plugin alongside the runtime; the job action appears in the session header whenever the session has at least one live job. A click opens the popover: live rows first by start time, then settled rows by finish time, each showing the producer kind, label, status, and an elapsed duration that ticks once per second while live and freezes at completion. Settled rows disappear with the control when the last live job settles.
 
 ### Dismissal and limits
 
-Escape closes the list and returns focus to the trigger, as does a pointer press outside it. The list shows what one session can see through the wire view, so a job owned by another session never appears here; a process restart empties the list while the transcript keeps the `run_in_background` cards that started those jobs.
+Escape closes the list and returns focus to the trigger, as does a pointer press outside it. The last live job settling closes the list before the control unmounts, so focus does not remain on a removed trigger. The list shows what one session can see through the wire view, so a job owned by another session never appears here; a process restart empties the list while the transcript keeps the `run_in_background` cards that started those jobs.
 
 -----
 
@@ -39,7 +39,7 @@ Escape closes the list and returns focus to the trigger, as does a pointer press
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The package contributes one entry to `conversation.session.header.actions` (`JobListAction`), and the data arrives entirely through the `jobsBySession` list mirror that the Session Controller binding folds from `session/jobs` frames — no RPC, and no state beyond popover visibility. The badge counts `running` plus `stopping` and is omitted at zero. Rows are ordered with live rows first by `startedAt` ascending, then settled rows by `finishedAt` descending, with a same-millisecond tie broken on start order; a settled row missing `finishedAt` reads as zero rather than as a negative figure, and a duration past an hour stays in hours. Settled rows stay visible because a failed job's `detail` is the only place its failure is legible. The behavior is specified by the [Web background-job display Agent Note](../../../.agents/notes/implemented/feature/2026-08-08-web-background-job-display.md).
+The package contributes one entry to `conversation.session.header.actions` (`JobListAction`), and the data arrives entirely through the `jobsBySession` list mirror that the Session Controller binding folds from `session/jobs` frames — no RPC, and no state beyond popover visibility. The badge counts `running` plus `stopping`; a zero count unmounts the whole entry. Rows are ordered with live rows first by `startedAt` ascending, then settled rows by `finishedAt` descending, with a same-millisecond tie broken on start order; a settled row missing `finishedAt` reads as zero rather than as a negative figure, and a duration past an hour stays in hours. The behavior is specified by the [Web background-job display Agent Note](../../../.agents/notes/implemented/feature/2026-08-08-web-background-job-display.md), with the live-only trigger lifecycle owned by the [job-badge lifecycle note](../../../.agents/notes/implemented/bug-fix/2026-08-15-job-badge-hides-when-idle.md).
 
 </details>
 

@@ -7,8 +7,6 @@ export const NS = 'job'
 export const zh = {
   'count.live.one': '{count} 个后台任务运行中',
   'count.live.other': '{count} 个后台任务运行中',
-  'count.idle.one': '{count} 个后台任务',
-  'count.idle.other': '{count} 个后台任务',
   'list.aria': '后台任务',
   'status.running': '运行中',
   'status.stopping': '正在停止',
@@ -26,8 +24,6 @@ export const zh = {
 export const en: Record<JobKey, string> = {
   'count.live.one': '{count} background job running',
   'count.live.other': '{count} background jobs running',
-  'count.idle.one': '{count} background job',
-  'count.idle.other': '{count} background jobs',
   'list.aria': 'Background jobs',
   'status.running': 'running',
   'status.stopping': 'stopping',
