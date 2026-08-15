@@ -22,7 +22,6 @@ import { newEnglishPage, saveFailureShot } from './support.ts'
 const FIXTURE = fileURLToPath(new URL('./snapshots/fresh-round-trip/session.jsonl', import.meta.url))
 const SNAPSHOT_DIR = fileURLToPath(new URL('./snapshots/background-job-list', import.meta.url))
 const RUNNING_EXPECTED = join(SNAPSHOT_DIR, 'running.expected.md')
-const SETTLED_EXPECTED = join(SNAPSHOT_DIR, 'settled.expected.md')
 const MODE = webSnapshotMode()
 const SEED_ID = 'background-job-list-web-e2e'
 // Long enough that the running assertions never race the process exiting on
@@ -112,31 +111,14 @@ describe.skipIf(MODE === 'record')('web e2e: background job list', () => {
     expect(tripwire.warnings).toEqual([])
   }, 60_000)
 
-  it('flips the open list to the cancelled outcome when the registry settles it', async () => {
-    onTestFailed(() => saveFailureShot(page, 'web-e2e-background-job-settled'))
-    expect(scaffold.ctx.jobs.kill(jobId, agent, 'web e2e cancellation')).toBe('requested')
-
-    // The trigger drops its live count once the task leaves running/stopping,
-    // which is also the proof that settlement reached the browser unprompted.
-    const idle = page.getByRole('button', { name: '1 background job' })
-    await idle.waitFor({ timeout: 20_000 })
-
-    const snapshot = await captureStableAria(page, '[class*="menu"]', scaffold.workspaceCwd)
-    await compareOrRefreshGolden(SETTLED_EXPECTED, snapshot, MODE)
-    expect(tripwire.pageErrors).toEqual([])
-    expect(tripwire.warnings).toEqual([])
-  }, 60_000)
-
-  it('keeps its snapshot inventory closed', async () => {
-    await assertFixtureInventory(SNAPSHOT_DIR, ['running.expected.md', 'settled.expected.md'])
-  })
-
   it('keeps the job list inside a phone viewport', async () => {
     // The trigger sits at the header's right end; the 336px list anchored at
     // its left edge runs past a phone's right viewport edge (only the first
     // ~90px stay visible). On narrow columns the list re-anchors to the
     // session header (JobListAction.module.css, <=600px) and takes a
-    // column-relative width, so every row stays reachable.
+    // column-relative width, so every row stays reachable. Runs while the
+    // previous scenario's job is still live — the control exists only for
+    // work in flight.
     const mobilePage = await newEnglishPage(browser, 844)
     onTestFailed(() => saveFailureShot(mobilePage, 'web-e2e-background-job-mobile'))
     const mobileTripwire = watchConsole(mobilePage)
@@ -153,8 +135,7 @@ describe.skipIf(MODE === 'record')('web e2e: background job list', () => {
       await sessionRow.waitFor({ timeout: 10_000 })
       await sessionRow.click()
       await mobilePage.getByRole('button', { name: 'Collapse sidebar' }).click()
-      // The settled job from the previous scenario keeps the trigger alive.
-      const trigger = mobilePage.getByRole('button', { name: '1 background job' })
+      const trigger = mobilePage.getByRole('button', { name: '1 background job running' })
       await trigger.waitFor({ timeout: 20_000 })
       await trigger.click()
       const menu = mobilePage.getByRole('list', { name: 'Background jobs' })
@@ -178,4 +159,25 @@ describe.skipIf(MODE === 'record')('web e2e: background job list', () => {
       await mobilePage.close()
     }
   }, 60_000)
+
+  it('unmounts the header control once the last live job settles', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-background-job-settled'))
+    // The running scenario left the job live and the list open; pin both
+    // before the kill so the polls below cannot pass vacuously.
+    const trigger = page.getByRole('button', { name: '1 background job running' })
+    expect(await trigger.count()).toBe(1)
+    expect(await page.getByRole('list', { name: 'Background jobs' }).count()).toBe(1)
+    expect(scaffold.ctx.jobs.kill(jobId, agent, 'web e2e cancellation')).toBe('requested')
+
+    // The control exists for work in flight: the settle removes trigger and
+    // list together — the trigger never lingers as a settled-history badge.
+    await expect.poll(() => trigger.count(), { timeout: 20_000 }).toBe(0)
+    await expect.poll(() => page.getByRole('list', { name: 'Background jobs' }).count(), { timeout: 10_000 }).toBe(0)
+    expect(tripwire.pageErrors).toEqual([])
+    expect(tripwire.warnings).toEqual([])
+  }, 60_000)
+
+  it('keeps its snapshot inventory closed', async () => {
+    await assertFixtureInventory(SNAPSHOT_DIR, ['running.expected.md'])
+  })
 })

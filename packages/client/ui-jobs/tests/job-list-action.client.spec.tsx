@@ -68,12 +68,21 @@ describe('JobListAction visibility', () => {
     expect(container.innerHTML).toBe('')
   })
 
-  it('counts only live jobs, and falls back to the total when none are live', () => {
-    const { rerender } = render(<JobListAction {...props([job(), job({ id: 'bash-2' as JobView['id'] })])} />)
+  it('counts live jobs only, even while settled rows remain', () => {
+    render(<JobListAction {...props([
+      job(),
+      job({ id: 'bash-2' as JobView['id'] }),
+      job({ id: 'bash-3' as JobView['id'], status: 'completed', finishedAt: START + 3_000 }),
+    ])} />)
     expect(screen.getByRole('button', { name: '2 个后台任务运行中' })).toBeDefined()
+  })
 
-    rerender(<JobListAction {...props([job({ status: 'completed', finishedAt: START + 3_000 })])} />)
-    expect(screen.getByRole('button', { name: '1 个后台任务' })).toBeDefined()
+  it('renders nothing once every job has settled', () => {
+    const { container } = render(<JobListAction {...props([
+      job({ status: 'completed', finishedAt: START + 3_000 }),
+      job({ id: 'bash-2' as JobView['id'], status: 'failed', finishedAt: START + 3_000 }),
+    ])} />)
+    expect(container.innerHTML).toBe('')
   })
 
   it('closes and unmounts when the last job disappears while the list is open', () => {
@@ -105,19 +114,21 @@ describe('JobListAction rows', () => {
 
   it('breaks a settled tie on start order so map iteration never decides it', () => {
     render(<JobListAction {...props([
+      job({ id: 'bash-live' as JobView['id'], label: 'live' }),
       job({ id: 'bash-2' as JobView['id'], label: 'second', status: 'completed', startedAt: START + 10, finishedAt: START + 100 }),
       job({ id: 'bash-1' as JobView['id'], label: 'first', status: 'completed', startedAt: START, finishedAt: START + 100 }),
     ])} />)
     fireEvent.click(screen.getByRole('button'))
-    expect(rowCells().map(cells => cells[1])).toEqual(['first', 'second'])
+    expect(rowCells().map(cells => cells[1])).toEqual(['live', 'first', 'second'])
   })
 
   it('prefers the producer detail over the generic status word', () => {
     render(<JobListAction {...props([
-      job({ status: 'killed', detail: 'signal: SIGTERM', finishedAt: START + 2_000 }),
+      job({ id: 'bash-live' as JobView['id'], label: 'live' }),
+      job({ id: 'bash-2' as JobView['id'], status: 'killed', detail: 'signal: SIGTERM', finishedAt: START + 2_000 }),
     ])} />)
     fireEvent.click(screen.getByRole('button'))
-    expect(rowCells()[0]).toContain('signal: SIGTERM')
+    expect(rowCells()[1]).toContain('signal: SIGTERM')
   })
 
   it('renders every status word, including the stopping transition', () => {
@@ -152,13 +163,14 @@ describe('JobListAction duration', () => {
 
   it('widens to minutes and then hours, and never shows a negative figure', () => {
     render(<JobListAction {...props([
+      job({ id: 'bash-live' as JobView['id'], label: 'live' }),
       job({ id: 'bash-1' as JobView['id'], label: 'm', status: 'completed', finishedAt: START + 125_000 }),
       job({ id: 'bash-2' as JobView['id'], label: 'h', status: 'completed', finishedAt: START + 7_380_000 }),
       // A clock that moved backwards must not render a negative duration.
       job({ id: 'bash-3' as JobView['id'], label: 'skew', status: 'completed', startedAt: START + 5_000, finishedAt: START }),
     ])} />)
     fireEvent.click(screen.getByRole('button'))
-    expect(rowCells().map(cells => cells[3])).toEqual(['2小时3分', '2分5秒', '0秒'])
+    expect(rowCells().map(cells => cells[3])).toEqual(['0秒', '2小时3分', '2分5秒', '0秒'])
   })
 
   it('runs no clock while the list is closed', () => {
@@ -169,10 +181,10 @@ describe('JobListAction duration', () => {
     expect(interval).toHaveBeenCalledTimes(1)
   })
 
-  it('runs no clock for an open list holding only settled jobs', () => {
+  it('renders nothing for a settled-only list, so no clock can run', () => {
     const interval = vi.spyOn(globalThis, 'setInterval')
-    render(<JobListAction {...props([job({ status: 'completed', finishedAt: START })])} />)
-    fireEvent.click(screen.getByRole('button'))
+    const { container } = render(<JobListAction {...props([job({ status: 'completed', finishedAt: START })])} />)
+    expect(container.innerHTML).toBe('')
     expect(interval).not.toHaveBeenCalled()
   })
 })
@@ -218,11 +230,13 @@ describe('JobListAction wire tolerance', () => {
     // `finishedAt` is optional on the wire; the Host always sets it, so this
     // covers a producer or carrier that ever stops doing so.
     render(<JobListAction {...props([
+      job({ id: 'bash-live' as JobView['id'], label: 'live' }),
       job({ id: 'bash-1' as JobView['id'], label: 'no finish', status: 'completed' }),
       job({ id: 'bash-2' as JobView['id'], label: 'finished', status: 'completed', startedAt: START - 1_000, finishedAt: START + 2_000 }),
     ])} />)
     fireEvent.click(screen.getByRole('button'))
     expect(rowCells().map(cells => [cells[1], cells[3]])).toEqual([
+      ['live', '0秒'],
       ['finished', '3秒'],
       ['no finish', '0秒'],
     ])
@@ -230,10 +244,11 @@ describe('JobListAction wire tolerance', () => {
 
   it('falls back to start order when neither settled job carries a finish time', () => {
     render(<JobListAction {...props([
+      job({ id: 'bash-live' as JobView['id'], label: 'live' }),
       job({ id: 'bash-2' as JobView['id'], label: 'later', status: 'failed', startedAt: START + 1_000 }),
       job({ id: 'bash-1' as JobView['id'], label: 'earlier', status: 'failed', startedAt: START }),
     ])} />)
     fireEvent.click(screen.getByRole('button'))
-    expect(rowCells().map(cells => cells[1])).toEqual(['later', 'earlier'])
+    expect(rowCells().map(cells => cells[1])).toEqual(['live', 'later', 'earlier'])
   })
 })

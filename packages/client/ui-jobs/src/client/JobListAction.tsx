@@ -86,10 +86,13 @@ function ordered(jobs: readonly JobView[]): JobView[] {
 
 /**
  * Session-header entry point for this session's background jobs. It renders
- * nothing at all until the session has at least one job, so an ordinary
- * conversation never grows a control for a capability it is not using.
+ * nothing at all until the session has at least one live job, and unmounts
+ * entirely once the last live job settles: the control exists for work in
+ * flight, not as a permanent history badge (a settled job's outcome is the
+ * conversation's own tool row). Settled rows render inside the list only
+ * alongside live ones, as the recent-outcome tail of work still running.
  * @param props - runtime slot currency plus the namespace translator.
- * @returns the trigger and its popover list, or null when there is nothing to show.
+ * @returns the trigger and its popover list, or null when there is nothing live to show.
  */
 export function JobListAction({ sessionId, useSessions, t }: JobListActionProps) {
   const jobs = useSessions(state => state.jobsBySession[sessionId]) ?? NO_TASKS
@@ -120,18 +123,16 @@ export function JobListAction({ sessionId, useSessions, t }: JobListActionProps)
     return () => { clearInterval(timer) }
   }, [open, liveCount])
 
-  // The last job disappearing removes this control; close first so focus does
-  // not vanish from an unmounting node.
+  // The last live job disappearing unmounts this control (the guard below);
+  // close first so focus does not vanish from an unmounting node.
   useEffect(() => {
-    if (jobs.length === 0 && open) setOpen(false)
-  }, [jobs.length, open])
+    if ((jobs.length === 0 || liveCount === 0) && open) setOpen(false)
+  }, [jobs.length, liveCount, open])
 
-  if (jobs.length === 0) return null
+  if (jobs.length === 0 || liveCount === 0) return null
 
-  const countKey = liveCount > 0
-    ? (liveCount === 1 ? 'count.live.one' : 'count.live.other')
-    : (jobs.length === 1 ? 'count.idle.one' : 'count.idle.other')
-  const countLabel = t(countKey, { count: liveCount > 0 ? liveCount : jobs.length })
+  const countKey = liveCount === 1 ? 'count.live.one' : 'count.live.other'
+  const countLabel = t(countKey, { count: liveCount })
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
     if (event.key !== 'Escape' || !open) return
@@ -157,7 +158,7 @@ export function JobListAction({ sessionId, useSessions, t }: JobListActionProps)
           setOpen(current => !current)
         }}
       >
-        {liveCount > 0 ? <StateDot state="ongoing" className={css.triggerDot} /> : null}
+        <StateDot state="ongoing" className={css.triggerDot} />
         <span className={css.count}>{countLabel}</span>
         <IconChevronDownOutline14 className={open ? css.triggerOpen : undefined} />
       </button>
