@@ -163,6 +163,26 @@
   display: none;
 }
 
+/* Narrow columns: let the title row wrap when crumbs + actions + utilities
+   cannot share one line. The cluster sizes from its content so the row wraps
+   the utilities instead of crushing the action controls. */
+@media (max-width: 720px) {
+  .titleRow {
+    flex-wrap: wrap;
+    row-gap: 4px;
+  }
+
+  .titleCluster {
+    flex: 1 1 auto;
+    flex-wrap: wrap;
+    row-gap: 2px;
+  }
+
+  .headerUtilities {
+    margin-left: auto;
+  }
+}
+
 /* figma Tab_Group 34:11441: 35px strip, gap 36, pad-left 8, tabs bottom-aligned.
    Positioned above the header's own paint, so the active bar covers the rule. */
 .tabs {

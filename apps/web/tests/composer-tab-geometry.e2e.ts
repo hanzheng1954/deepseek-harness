@@ -345,6 +345,59 @@ describe('web e2e: input card position across view tabs', () => {
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
 
+  it('wraps the composer toolbar into two rows on a phone without overlapping controls', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-composer-mobile-toolbar'))
+    await setMeasuredViewport(page, { width: 390, height: 844 }, true)
+    try {
+      const metrics = await page.locator('[data-composer-seat] [data-composer-card]').evaluate((cardEl) => {
+        const row = cardEl.lastElementChild as HTMLElement
+        const tools = row.children[0] as HTMLElement
+        const trailing = row.children[row.children.length - 1] as HTMLElement
+        const send = trailing.children[trailing.children.length - 1] as HTMLElement
+        const rowRect = row.getBoundingClientRect()
+        const toolsRect = tools.getBoundingClientRect()
+        const trailingRect = trailing.getBoundingClientRect()
+        const sendRect = send.getBoundingClientRect()
+        const crushed = [...tools.children, ...trailing.children]
+          .filter(child => child.getBoundingClientRect().width > 0 && getComputedStyle(child).textOverflow !== 'ellipsis')
+          .some(child => child.scrollWidth > child.clientWidth + 1)
+        const boxes = [...tools.children, ...trailing.children]
+          .map(child => child.getBoundingClientRect())
+          .filter(box => box.width > 0 && box.height > 0)
+        let overlapping = false
+        for (let i = 0; i < boxes.length && !overlapping; i++) {
+          for (let j = i + 1; j < boxes.length; j++) {
+            const a = boxes[i]!
+            const b = boxes[j]!
+            if (a.right > b.left + 1 && b.right > a.left + 1 && a.bottom > b.top + 1 && b.bottom > a.top + 1) {
+              overlapping = true
+              break
+            }
+          }
+        }
+        return {
+          twoLines: trailingRect.top > toolsRect.top,
+          toolsSpansLine: Math.abs(toolsRect.width - (rowRect.width - 16)) < 1,
+          sendAtRightEdge: Math.abs(sendRect.right - trailingRect.right) < 1,
+          crushed,
+          overlapping,
+          rowOverflows: row.scrollWidth > row.clientWidth + 1,
+          docScrollWidth: document.documentElement.scrollWidth,
+        }
+      })
+      expect(metrics.twoLines).toBe(true)
+      expect(metrics.toolsSpansLine).toBe(true)
+      expect(metrics.sendAtRightEdge).toBe(true)
+      expect(metrics.crushed).toBe(false)
+      expect(metrics.overlapping).toBe(false)
+      expect(metrics.rowOverflows).toBe(false)
+      expect(metrics.docScrollWidth).toBeLessThanOrEqual(390)
+      expect(tripwire.pageErrors).toEqual([])
+    } finally {
+      await setMeasuredViewport(page, WIDE_VIEWPORT, false)
+    }
+  }, 60_000)
+
   it('matches the committed tab geometry golden', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-composer-tab-geometry-golden'))
     await setMeasuredViewport(page, WIDE_VIEWPORT, false)
