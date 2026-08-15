@@ -72,6 +72,11 @@
   box-shadow: var(--dsw-shadow-lv2);
   font-size: 16px;
   line-height: 24px;
+  /* Named size container for the narrow-card toolbar wrap below: the
+     breakpoint keys on the card's own width (column minus clearances), not
+     the viewport, and the name keeps the query off the inner `.row`
+     container (PermissionSelect's anonymous collapse target). */
+  container: inputCard / inline-size;
   /* Elevated surface in dark, same as the menus: the draft scrollport inside
      scrolls once the composer hits its height cap, so the thumb takes the l2
      pair. Declared on the card because the elevation belongs to the surface,
@@ -321,6 +326,30 @@
 .trailing {
   flex: none;
   gap: 12px;
+}
+
+/* Narrow card (phones): the single toolbar row cannot fit attach + access +
+   plan + model + send — flex-shrink crushes `.modes` to a 1px sliver whose
+   icon trigger then paints over the model selector. The row wraps into two
+   lines instead: tools (attach/access/plan) on the first, model + meter +
+   send right-aligned on the second. The 520px cut is the card width where
+   the single row stops fitting even with the access chip collapsed to its
+   icon (PermissionSelect's 460px collapse is the row's own container).
+   Declared after the base flex rules so it wins the cascade. */
+@container inputCard (max-width: 520px) {
+  .row {
+    flex-wrap: wrap;
+  }
+
+  .tools {
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+  }
+
+  .trailing {
+    flex: 1 1 100%;
+    justify-content: flex-end;
+  }
 }
 
 /* Attach circle (figma + control): 28px, selector fill, primary glyph. */

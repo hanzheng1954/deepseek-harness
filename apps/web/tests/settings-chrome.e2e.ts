@@ -129,6 +129,59 @@ describe('web e2e: settings modal and General preferences', () => {
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
 
+  it('lays out the settings sheet edge to edge on a phone viewport', async () => {
+    // Narrow viewports fold the panel into a full-viewport sheet with a
+    // horizontal section tab strip (SettingsRoot.module.css, <=720px): the
+    // 188px rail + 24px gutters would otherwise leave the content column
+    // ~100px wide. The scenario drives the real CSS breakpoint, so it pins
+    // geometry rather than section copy.
+    const mobilePage = await browser.newPage({ viewport: { width: 390, height: 844 }, locale: ZH_BROWSER_LOCALE })
+    onTestFailed(() => saveFailureShot(mobilePage, 'web-e2e-settings-mobile'))
+    const mobileTripwire = watchConsole(mobilePage)
+    try {
+      await mobilePage.goto(scaffold.baseUrl, { waitUntil: 'load' })
+      await mobilePage.waitForSelector('[class*="frame"]', { timeout: 30_000 })
+      // The rail trigger renders icon-only, so it has no text name; the
+      // dialog-haspopup attribute is the shared trigger contract.
+      const trigger = mobilePage.locator('button[aria-haspopup="dialog"]').first()
+      await trigger.click()
+      const dialog = mobilePage.getByRole('dialog', { name: '设置' })
+      await dialog.waitFor({ timeout: 10_000 })
+      // Full-bleed sheet: the dialog box is the viewport, no margin.
+      const box = await dialog.boundingBox()
+      expect(box).not.toBeNull()
+      expect(box!.x).toBeLessThanOrEqual(0.5)
+      expect(box!.y).toBeLessThanOrEqual(0.5)
+      expect(Math.abs(box!.width - 390)).toBeLessThanOrEqual(0.5)
+      expect(Math.abs(box!.height - 844)).toBeLessThanOrEqual(0.5)
+      // The section rail folds into a horizontal tab strip: every section
+      // cell shares the strip's top edge...
+      const sections = dialog.locator('nav button')
+      expect(await sections.count()).toBeGreaterThanOrEqual(2)
+      const tops = new Set<number>()
+      for (let i = 0; i < await sections.count(); i++) {
+        const cellBox = await sections.nth(i).boundingBox()
+        expect(cellBox).not.toBeNull()
+        tops.add(Math.round(cellBox!.y))
+      }
+      expect(tops.size).toBe(1)
+      // ...and the content column keeps the full sheet width for the
+      // sections instead of the rail-squeezed sliver.
+      expect(await dialog.evaluate(el => el.querySelector('nav')?.nextElementSibling?.getBoundingClientRect().width ?? 0))
+        .toBe(390)
+      // Section switching still works at this size.
+      await dialog.getByRole('button', { name: '模型' }).click()
+      await expect.poll(() => dialog.getByRole('button', { name: '模型' }).getAttribute('aria-current'), { timeout: 5_000 }).toBe('true')
+      // The sheet covers the mask, so the header close button is the touch
+      // close path (focus lands there on open).
+      await dialog.getByRole('button', { name: '关闭' }).click()
+      await expect.poll(() => mobilePage.getByRole('dialog', { name: '设置' }).count(), { timeout: 5_000 }).toBe(0)
+      expect(mobileTripwire.pageErrors).toEqual([])
+    } finally {
+      await mobilePage.close()
+    }
+  }, 60_000)
+
   it('stores Permission as the default for future sessions without changing an existing session', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-settings-permission'))
     const existing = scaffold.ctx.sessions.create(SessionId('settings-permission-before'))

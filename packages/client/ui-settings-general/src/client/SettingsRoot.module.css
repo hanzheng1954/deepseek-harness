@@ -90,6 +90,15 @@
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
 }
 
+/* Dynamic viewport on every face: landscape phones keep the centered rail
+   panel (the sheet breakpoint is width-only), and 100vh overshoots the
+   visual viewport by the collapsed URL bar, hiding the panel's tail. */
+@supports (height: 100dvh) {
+  .panel {
+    height: min(800px, calc(100dvh - 48px));
+  }
+}
+
 /* Nav rail (figma .Setting-nav 501:29958): 188 wide, pad (12,22,12,0),
    gap 18, no own fill — the panel white shows through. */
 .nav {
@@ -223,4 +232,68 @@
   overflow: hidden;
   clip: rect(0 0 0 0);
   white-space: nowrap;
+}
+
+/* Mobile sheet (<=720px viewports — phones and split-screen halves): the
+   centered panel with the 188px rail would leave the content column ~100px
+   wide on a phone, collapsing every row. The panel becomes a full-viewport
+   sheet and the section rail folds into a horizontal tab strip above the
+   scrolling options; safe-area insets keep the title clear of notches and
+   the list tail clear of the home-indicator area. The mask is fully covered,
+   so the header close button (focus lands there on open) is the touch close
+   path, matching full-screen sheets. */
+@media (max-width: 720px) {
+  .panel {
+    width: 100vw;
+    max-width: none;
+    height: 100vh;
+    border-radius: 0;
+    flex-direction: column;
+  }
+
+  /* Dynamic-viewport height: follow the mobile URL-bar collapse instead of
+     the fixed 100vh, which overshoots the visual viewport by the bar's size
+     (RiskConfirmation.module.css keeps the same fallback shape). */
+  @supports (height: 100dvh) {
+    .panel {
+      height: 100dvh;
+    }
+  }
+
+  .nav {
+    width: auto;
+    gap: 12px;
+    padding: calc(env(safe-area-inset-top, 0px) + 12px) 16px 0;
+  }
+
+  .navTitle {
+    padding: 0 4px;
+  }
+
+  .navList {
+    flex-direction: row;
+    gap: 8px;
+    padding-bottom: 12px;
+    overflow-x: auto;
+    /* A tab strip scrolls its own chrome away (the cells carry the affordance). */
+    scrollbar-width: none;
+  }
+
+  .navList::-webkit-scrollbar {
+    display: none;
+  }
+
+  .navCell {
+    flex: none;
+    gap: 6px;
+    padding: 9px 14px 9px 12px;
+  }
+
+  .content {
+    min-height: 0;
+  }
+
+  .options {
+    padding: 0 16px calc(env(safe-area-inset-bottom, 0px) + 24px);
+  }
 }

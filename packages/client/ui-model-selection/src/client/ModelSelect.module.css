@@ -89,6 +89,22 @@
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
 }
 
+/* Mobile: on narrow cards the trigger sits near the column's left edge, so a
+   list right-anchored to it extends under the sidebar rail (its left edge is
+   covered and unclickable there). A static root re-anchors the list to the
+   composer card — the next positioned ancestor — where a right inset and a
+   card-relative width cap keep it beside the trigger, inside the column. */
+@media (max-width: 560px) {
+  .root {
+    position: static;
+  }
+
+  .menu {
+    right: 12px;
+    width: min(240px, calc(100% - 24px));
+  }
+}
+
 .status,
 .empty {
   padding: 10px;

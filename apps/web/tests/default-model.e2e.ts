@@ -128,6 +128,42 @@ describe('web e2e: the composer model switch is the default for later sessions',
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
 
+  it('keeps the model menu inside a phone viewport, clear of the sidebar rail', async () => {
+    // On a narrow card the menu re-anchors from the trigger to the composer
+    // card (ModelSelect.module.css, <=560px): right-anchored to the trigger
+    // it would extend under the sidebar rail, where the rail paints over the
+    // list's left edge and steals its clicks. The shared beforeAll workspace
+    // connection is scaffold state, so this page's composer is already live.
+    const mobilePage = await browser.newPage({ viewport: { width: 360, height: 844 }, locale: ZH_BROWSER_LOCALE })
+    onTestFailed(() => saveFailureShot(mobilePage, 'web-e2e-model-menu-mobile'))
+    const mobileTripwire = watchConsole(mobilePage)
+    try {
+      await mobilePage.goto(scaffold.baseUrl, { waitUntil: 'load' })
+      await mobilePage.waitForSelector('[class*="frame"]', { timeout: 30_000 })
+      const trigger = mobilePage.getByRole('button', { name: /^选择模型/ })
+      await trigger.waitFor({ timeout: 15_000 })
+      await trigger.click()
+      const menu = mobilePage.getByRole('menu', { name: '模型与推理等级' })
+      await menu.waitFor({ timeout: 10_000 })
+      const box = await menu.boundingBox()
+      expect(box).not.toBeNull()
+      // Inside the viewport and clear of the 56px rail (plus clearance).
+      expect(box!.x + box!.width).toBeLessThanOrEqual(360)
+      expect(box!.x).toBeGreaterThanOrEqual(64)
+      // The left edge really belongs to the menu: its cell receives the
+      // click, not the sidebar column painted over it.
+      const hitIsMenu = await mobilePage.evaluate(({ x, y }) => {
+        const el = document.elementFromPoint(x, y)
+        return el !== null && el.closest('[role="menu"]') !== null
+      }, { x: box!.x + 8, y: box!.y + 12 })
+      expect(hitIsMenu).toBe(true)
+      expect(mobileTripwire.pageErrors).toEqual([])
+    } finally {
+      await mobilePage.close()
+    }
+  }, 60_000)
+
+
   it('goes inert when the route the default names stops being served', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-default-model-blocked'))
     const box = page.locator('textarea[data-input-phase], textarea').first()

@@ -132,6 +132,31 @@
   display: none;
 }
 
+/* Narrow columns: let the title row wrap when crumbs + actions + utilities
+   cannot share one line (flex-wrap only permits the wrap — a fitting row
+   keeps its single-line geometry). The cluster sizes from its content
+   (flex-basis auto, not the base 0) so the row wraps the utilities to their
+   own right-aligned line instead of crushing the cluster: a 0 basis lets it
+   shrink below the actions chips, which then spill out of the box and paint
+   under the utilities, whose hit area steals their clicks. Its own wrap is
+   the final fallback for exceptionally wide action sets. */
+@media (max-width: 720px) {
+  .titleRow {
+    flex-wrap: wrap;
+    row-gap: 4px;
+  }
+
+  .titleCluster {
+    flex: 1 1 auto;
+    flex-wrap: wrap;
+    row-gap: 2px;
+  }
+
+  .headerUtilities {
+    margin-left: auto;
+  }
+}
+
 /* figma Tab_Group 34:11441: 35px strip, gap 36, pad-left 8, tabs bottom-aligned. */
 .tabs {
   position: relative;

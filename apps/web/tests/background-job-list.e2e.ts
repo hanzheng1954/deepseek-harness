@@ -130,4 +130,52 @@ describe.skipIf(MODE === 'record')('web e2e: background job list', () => {
   it('keeps its snapshot inventory closed', async () => {
     await assertFixtureInventory(SNAPSHOT_DIR, ['running.expected.md', 'settled.expected.md'])
   })
+
+  it('keeps the job list inside a phone viewport', async () => {
+    // The trigger sits at the header's right end; the 336px list anchored at
+    // its left edge runs past a phone's right viewport edge (only the first
+    // ~90px stay visible). On narrow columns the list re-anchors to the
+    // session header (JobListAction.module.css, <=600px) and takes a
+    // column-relative width, so every row stays reachable.
+    const mobilePage = await newEnglishPage(browser, 844)
+    onTestFailed(() => saveFailureShot(mobilePage, 'web-e2e-background-job-mobile'))
+    const mobileTripwire = watchConsole(mobilePage)
+    try {
+      await mobilePage.setViewportSize({ width: 360, height: 844 })
+      await mobilePage.goto(scaffold.baseUrl, { waitUntil: 'load' })
+      await mobilePage.waitForSelector('[class*="frame"]', { timeout: 30_000 })
+      // Open the seeded session through the expanded sidebar.
+      await mobilePage.getByRole('button', { name: 'Open sidebar' }).click()
+      const groupRow = mobilePage.locator('[role="treeitem"]').first()
+      await groupRow.waitFor({ timeout: 15_000 })
+      await groupRow.click()
+      const sessionRow = mobilePage.locator('[role="treeitem"]').nth(1)
+      await sessionRow.waitFor({ timeout: 10_000 })
+      await sessionRow.click()
+      await mobilePage.getByRole('button', { name: 'Collapse sidebar' }).click()
+      // The settled job from the previous scenario keeps the trigger alive.
+      const trigger = mobilePage.getByRole('button', { name: '1 background job' })
+      await trigger.waitFor({ timeout: 20_000 })
+      await trigger.click()
+      const menu = mobilePage.getByRole('list', { name: 'Background jobs' })
+      await menu.waitFor({ timeout: 10_000 })
+      const box = await menu.boundingBox()
+      expect(box).not.toBeNull()
+      // Fully inside the viewport, clear of the rail.
+      expect(box!.x + box!.width).toBeLessThanOrEqual(360)
+      expect(box!.x).toBeGreaterThanOrEqual(64)
+      // The rightmost row area really belongs to the list: a probe point
+      // near the right edge resolves to a list row, not empty space.
+      const hitIsRow = await mobilePage.evaluate(({ x, y }) => {
+        const el = document.elementFromPoint(x, y)
+        // The rows are `<li>` elements with no explicit listitem role, so the
+        // probe anchors on the tag.
+        return el !== null && el.closest('li') !== null
+      }, { x: box!.x + box!.width - 12, y: box!.y + 16 })
+      expect(hitIsRow).toBe(true)
+      expect(mobileTripwire.pageErrors).toEqual([])
+    } finally {
+      await mobilePage.close()
+    }
+  }, 60_000)
 })

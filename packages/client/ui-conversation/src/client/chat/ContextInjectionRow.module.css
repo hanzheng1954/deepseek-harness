@@ -24,7 +24,10 @@
 }
 
 .source {
-  flex: none;
+  /* Shrinkable: long producer ids (e.g. an injected package name) must give
+     way and ellipsize on narrow columns instead of pushing the summary past
+     the row's clip edge mid-glyph (flex:none would keep the full width). */
+  flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
   color: var(--dsw-alias-label-tertiary);

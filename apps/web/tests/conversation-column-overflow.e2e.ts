@@ -282,6 +282,77 @@ describe('web e2e: the conversation column scrolls on one axis', () => {
     expect(tripwire.pageErrors).toEqual([])
   }, 120_000)
 
+  it('wraps the composer toolbar into two rows on a phone instead of overflowing the card', async () => {
+    // The single-row toolbar has to fit attach + access + plan + model + send;
+    // below ~520px of card width, flex-shrink crushed the access/plan column
+    // to a 1px sliver that painted over the model selector. The card is a
+    // named size container (InputBar.module.css) that folds the toolbar into
+    // two lines at that cut — tools first, model + send right-aligned below.
+    const mobilePage = await newEnglishPage(browser, 844)
+    onTestFailed(() => saveFailureShot(mobilePage, 'web-e2e-composer-mobile-toolbar'))
+    const mobileTripwire = watchConsole(mobilePage)
+    try {
+      await mobilePage.setViewportSize({ width: 390, height: 844 })
+      await mobilePage.goto(scaffold.baseUrl, { waitUntil: 'load' })
+      await mobilePage.waitForSelector('[data-composer-seat] [data-composer-card]', { timeout: 30_000 })
+      const metrics = await mobilePage.locator('[data-composer-seat] [data-composer-card]').evaluate((cardEl) => {
+        const row = cardEl.lastElementChild as HTMLElement
+        const tools = row.children[0] as HTMLElement
+        const trailing = row.children[row.children.length - 1] as HTMLElement
+        const send = trailing.children[trailing.children.length - 1] as HTMLElement
+        const rowRect = row.getBoundingClientRect()
+        const toolsRect = tools.getBoundingClientRect()
+        const trailingRect = trailing.getBoundingClientRect()
+        const sendRect = send.getBoundingClientRect()
+        // The pre-fix symptom, stated generically: a toolbar column whose box
+        // was crushed to a sliver still carried its controls as overflow, and
+        // those controls painted across the neighboring column.
+        const crushed = [...tools.children, ...trailing.children]
+          .filter(child => child.getBoundingClientRect().width > 0 && getComputedStyle(child).textOverflow !== 'ellipsis')
+          .some(child => child.scrollWidth > child.clientWidth + 1)
+        const boxes = [...tools.children, ...trailing.children]
+          .map(child => child.getBoundingClientRect())
+          .filter(box => box.width > 0 && box.height > 0)
+        let overlapping = false
+        for (let i = 0; i < boxes.length && !overlapping; i++) {
+          for (let j = i + 1; j < boxes.length; j++) {
+            const a = boxes[i]!
+            const b = boxes[j]!
+            if (a.right > b.left + 1 && b.right > a.left + 1 && a.bottom > b.top + 1 && b.bottom > a.top + 1) {
+              overlapping = true
+              break
+            }
+          }
+        }
+        return {
+          // Two lines: the trailing row sits below the tools row.
+          twoLines: trailingRect.top > toolsRect.top,
+          // Tools spans its line (row pads 8px per side).
+          toolsSpansLine: Math.abs(toolsRect.width - (rowRect.width - 16)) < 1,
+          // The send circle lands at the card's right edge on its line.
+          sendAtRightEdge: Math.abs(sendRect.right - trailingRect.right) < 1,
+          // No toolbar column is crushed into a sliver, and none of them
+          // paints across another.
+          crushed,
+          overlapping,
+          // Nothing overflows: no horizontal range on the toolbar row or the page.
+          rowOverflows: row.scrollWidth > row.clientWidth + 1,
+          docScrollWidth: document.documentElement.scrollWidth,
+        }
+      })
+      expect(metrics.twoLines).toBe(true)
+      expect(metrics.toolsSpansLine).toBe(true)
+      expect(metrics.sendAtRightEdge).toBe(true)
+      expect(metrics.crushed).toBe(false)
+      expect(metrics.overlapping).toBe(false)
+      expect(metrics.rowOverflows).toBe(false)
+      expect(metrics.docScrollWidth).toBeLessThanOrEqual(390)
+      expect(mobileTripwire.pageErrors).toEqual([])
+    } finally {
+      await mobilePage.close()
+    }
+  }, 60_000)
+
   it('scrolls horizontally again once the axis is opened back up (control)', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-conversation-column-overflow-control'))
     // The mutation control, run in the page rather than against a second

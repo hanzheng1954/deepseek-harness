@@ -62,6 +62,23 @@
   box-shadow: var(--dsw-shadow-lv3);
 }
 
+/* Mobile: the trigger sits at the header's right end, so a list anchored at
+   its left edge runs past the viewport's right edge (only the first ~90px
+   stay visible on a phone). A static root re-anchors the list to the session
+   header — the next positioned ancestor — where a right inset and a column-
+   relative width cap keep the whole list inside the viewport. */
+@media (max-width: 600px) {
+  .root {
+    position: static;
+  }
+
+  .menu {
+    left: auto;
+    right: 20px;
+    width: min(336px, calc(100% - 40px));
+  }
+}
+
 .row {
   display: flex;
   align-items: center;
