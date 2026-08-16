@@ -96,6 +96,12 @@ export interface SidebarOwnerProps {
   collapsed: boolean
   /** Rendered column width in px (SIDEBAR_COLLAPSED when collapsed). */
   width: number
+  /**
+   * True below the auto-collapse breakpoint: an expanded sidebar floats
+   * over the conversation, so the shell dismisses it on session picks and
+   * outside taps.
+   */
+  narrow: boolean
 }
 
 /** Conversation owner share: business state and actions belong to the registrant. */

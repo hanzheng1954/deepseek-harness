@@ -134,7 +134,9 @@ describe.skipIf(MODE === 'record')('web e2e: background job list', () => {
       const sessionRow = mobilePage.locator('[role="treeitem"]').nth(1)
       await sessionRow.waitFor({ timeout: 10_000 })
       await sessionRow.click()
-      await mobilePage.getByRole('button', { name: 'Collapse sidebar' }).click()
+      // Picking the session dismisses the narrow drawer; wait for the rail
+      // to return before driving the header trigger.
+      await mobilePage.getByRole('button', { name: 'Open sidebar' }).waitFor({ timeout: 10_000 })
       const trigger = mobilePage.getByRole('button', { name: '1 background job running' })
       await trigger.waitFor({ timeout: 20_000 })
       await trigger.click()

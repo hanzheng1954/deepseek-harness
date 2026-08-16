@@ -504,6 +504,44 @@ describe('web e2e: navigation & panes over a rich seeded session', () => {
     expect(await page.evaluate(() => navigator.clipboard.readText())).toContain('NAVIGATION_OK')
   }, 60_000)
 
+  it('dismisses the narrow sidebar drawer on session picks and outside taps, and keeps the rail search expanded', async () => {
+    // The rail search must expand the drawer AND land in the expanded search:
+    // the arming click itself must not bubble into the outside-click handler
+    // and collapse the expansion it just requested (the discrete-event flush
+    // race pinned here needs a real engine). Opening a session, and a tap
+    // outside the column, then dismiss the drawer so the conversation
+    // regains the screen.
+    const mobilePage = await newEnglishPage(browser, 844)
+    onTestFailed(() => saveFailureShot(mobilePage, 'web-e2e-sidebar-mobile-drawer'))
+    const mobileTripwire = watchConsole(mobilePage)
+    try {
+      await mobilePage.setViewportSize({ width: 390, height: 844 })
+      await mobilePage.goto(scaffold.baseUrl, { waitUntil: 'load' })
+      await mobilePage.waitForSelector('[class*="frame"]', { timeout: 30_000 })
+      // Rail search: drawer expands and the search box is live (visible + tabbable).
+      await mobilePage.getByRole('button', { name: 'Search sessions' }).click()
+      const search = mobilePage.getByRole('textbox', { name: 'Search sessions...' })
+      await search.waitFor({ state: 'visible', timeout: 10_000 })
+      await expect.poll(() => search.evaluate((el: HTMLInputElement) => el.tabIndex), { timeout: 5_000 }).toBe(0)
+      // Picking a session dismisses the drawer.
+      await search.fill('navscenario')
+      const result = mobilePage.getByRole('tree', { name: 'Search results' }).getByRole('treeitem')
+      await result.waitFor({ timeout: 15_000 })
+      await result.click()
+      await mobilePage.getByRole('tab', { name: 'Chat', exact: true }).waitFor({ timeout: 15_000 })
+      await mobilePage.getByRole('button', { name: 'Open sidebar' }).waitFor({ timeout: 10_000 })
+      // A tap outside the re-expanded drawer dismisses it too.
+      await mobilePage.getByRole('button', { name: 'Open sidebar' }).click()
+      await mobilePage.getByRole('button', { name: 'Collapse sidebar' }).waitFor({ timeout: 10_000 })
+      await mobilePage.mouse.click(300, 400)
+      await mobilePage.getByRole('button', { name: 'Open sidebar' }).waitFor({ timeout: 10_000 })
+      expect(await mobilePage.getByRole('button', { name: 'Collapse sidebar' }).count()).toBe(0)
+      expect(mobileTripwire.pageErrors).toEqual([])
+    } finally {
+      await mobilePage.close()
+    }
+  }, 90_000)
+
   it.skipIf(MODE === 'record')('keeps the recorded fixture inventory exact', async () => {
     await assertFixtureInventory(SNAPSHOT_DIR, [
       'seed.jsonl', 'search-results.expected.md', 'trajectory.expected.md',

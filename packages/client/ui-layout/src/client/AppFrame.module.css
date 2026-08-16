@@ -29,6 +29,19 @@
   border-right: 1px solid var(--dsw-alias-border-l1);
 }
 
+/* Narrow drawer: the expanded sidebar floats over the conversation instead
+   of taking a grid track, so opening or dismissing it never reflows the
+   center column (its scroll geometry stays put). SIDEBAR_DEFAULT wide. */
+.sidebarCol[data-sidebar-overlay] {
+  position: absolute;
+  z-index: 30;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 280px;
+  box-shadow: var(--dsw-shadow-lv3);
+}
+
 .centerCol {
   min-width: 0;
   display: flex;

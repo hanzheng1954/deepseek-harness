@@ -9,7 +9,7 @@
  * menu in between; the flow and its error dialog live in WorkspacePicker
  * (same package — direct composition, no slot between them).
  */
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import clsx from 'clsx'
 import {
   Button, IconCloseFill14, IconPersonalizationOutline16,
@@ -741,6 +741,7 @@ function SearchResults({
 export function WorkspaceBrowser({
   wide,
   expandSidebar,
+  collapseSidebar,
   useSessions,
   useWorkspaces,
   useStore,
@@ -761,6 +762,13 @@ export function WorkspaceBrowser({
   renderSlot,
   t,
 }: WorkspaceBrowserProps) {
+  // Opening a session is a terminal navigation pick: on narrow viewports it
+  // also dismisses the expanded drawer so the conversation regains the
+  // screen (collapseSidebar is a no-op above the breakpoint).
+  const openAndDismiss = useCallback((sessionId: SessionId): void => {
+    open(sessionId)
+    collapseSidebar()
+  }, [open, collapseSidebar])
   const workspaces = useWorkspaces(state => state.items)
   const workspacePhase = useWorkspaces(state => state.phase)
   const archivedSessionIds = useWorkspaces(state => state.archivedSessionIds)
@@ -818,7 +826,13 @@ export function WorkspaceBrowser({
   }, [wide, searchExpanded, searchOnExpand])
 
   useEffect(() => {
-    if (!wide || !searchExpanded) return
+    // The rail-search arm window (searchOnExpand) must not attach this
+    // listener: React flushes discrete-event effects synchronously, so the
+    // arming click itself would bubble into a just-attached document
+    // listener, read the rail button as "outside", and reset the expansion
+    // it just requested. Once the arm clears (focus landed), the listener
+    // attaches for real outside clicks.
+    if (!wide || !searchExpanded || searchOnExpand) return
     const onClick = (event: MouseEvent): void => {
       if (!(event.target instanceof Node) || searchRoot.current?.contains(event.target) === true) return
       searchInput.current?.blur()
@@ -827,7 +841,7 @@ export function WorkspaceBrowser({
     }
     document.addEventListener('click', onClick)
     return () => { document.removeEventListener('click', onClick) }
-  }, [normalizedQuery, wide, searchExpanded])
+  }, [normalizedQuery, wide, searchExpanded, searchOnExpand])
 
   useEffect(() => {
     if (normalizedQuery === '') {
@@ -1093,6 +1107,7 @@ export function WorkspaceBrowser({
             className={css.searchButton}
             aria-label={t('search.sessions.aria')}
             onClick={() => {
+              console.log('[dbg] rail search clicked')
               setSearchExpanded(true)
               setSearchOnExpand(true)
               expandSidebar()
@@ -1110,7 +1125,7 @@ export function WorkspaceBrowser({
           ? (
             <SearchResults
               useSessions={useSessions}
-              open={open}
+              open={openAndDismiss}
               workspaces={workspaces}
               archivedSessionIds={archivedSessionIds}
               query={normalizedQuery}
@@ -1122,7 +1137,7 @@ export function WorkspaceBrowser({
           : groupBy === 'flat'
             ? (
               <FlatList
-                useSessions={useSessions} open={open} forkSession={forkSession}
+                useSessions={useSessions} open={openAndDismiss} forkSession={forkSession}
                 onSessionRename={onSessionRename} onSessionArchive={onSessionArchive}
                 archivedSessionIds={archivedSessionIds}
                 orderBy={orderBy}
@@ -1148,7 +1163,7 @@ export function WorkspaceBrowser({
                 setSessionOrder={actions.setSessionOrder}
                 archivedSessionIds={archivedSessionIds}
                 startSession={startSession}
-                open={open}
+                open={openAndDismiss}
                 insertWorkspaceBefore={insertWorkspaceBefore}
                 insertSessionBefore={insertSessionBefore}
                 orderBy={orderBy}

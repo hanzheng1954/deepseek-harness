@@ -15,7 +15,7 @@
  * scrollbar indirection away while it is elsewhere, so a list the user is not
  * pointing at carries no bar.
  */
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import clsx from 'clsx'
 import {
   BrandWordmark, FishLogo,
@@ -44,6 +44,7 @@ const SCROLLBAR_LINGER_MS = 2000
 export function SidebarRoot({
   collapsed,
   width,
+  narrow,
   startSession,
   toggleSidebar,
   t,
@@ -113,6 +114,39 @@ export function SidebarRoot({
     }
   }, [pointerInside])
 
+  // Narrow-expanded squeezes the conversation column, so the drawer must
+  // dismiss itself: a click anywhere outside the column collapses it (the
+  // settings panel is a fixed-position descendant of this column, so a tap
+  // on it still reads as inside and never dismisses the sidebar under it).
+  // Dismissal rides `click`, not `pointerdown`: collapsing on the press
+  // re-lays the frame mid-gesture, and the very click that should reach the
+  // conversation control gets eaten by the shift. The inside/outside fact is
+  // captured at the press instead (capture phase): a click whose handler
+  // unmounts the pressed node (the rail controls do exactly that when they
+  // expand the drawer) still bubbles with a detached target, whose
+  // `contains()` reads false during the bubble.
+  const pressInside = useRef(true)
+  const collapseNarrow = useCallback((): void => {
+    if (narrow && !collapsed) toggleSidebar()
+  }, [narrow, collapsed, toggleSidebar])
+  useEffect(() => {
+    if (!narrow || collapsed) return
+    pressInside.current = true
+    const onPointerDown = (event: PointerEvent): void => {
+      pressInside.current = event.target instanceof Node
+        && column.current?.contains(event.target) === true
+    }
+    const onOutsideClick = (): void => {
+      if (!pressInside.current) toggleSidebar()
+    }
+    document.addEventListener('pointerdown', onPointerDown, true)
+    document.addEventListener('click', onOutsideClick)
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown, true)
+      document.removeEventListener('click', onOutsideClick)
+    }
+  }, [narrow, collapsed, toggleSidebar])
+
   return (
     <div
       ref={column}
@@ -135,7 +169,7 @@ export function SidebarRoot({
             type="button"
             className={clsx(css.brand, css.wide)}
             aria-label={t('session.new.label')}
-            onClick={() => { startSession() }}
+            onClick={() => { startSession(); collapseNarrow() }}
           >
             <BrandWordmark />
           </button>
@@ -162,7 +196,7 @@ export function SidebarRoot({
           type="button"
           className={css.newSession}
           aria-label={t('session.new.label')}
-          onClick={() => { startSession() }}
+          onClick={() => { startSession(); collapseNarrow() }}
         >
           <IconNewChatOutline16 size={wide ? 14 : 18} />
           {wide && <span className={clsx(css.newSessionLabel, css.wide)}>{t('session.new')}</span>}
@@ -175,6 +209,7 @@ export function SidebarRoot({
         {renderSlot('sidebar.workspaces', {
           wide,
           expandSidebar: () => { if (collapsed) toggleSidebar() },
+          collapseSidebar: collapseNarrow,
         })}
       </div>
 

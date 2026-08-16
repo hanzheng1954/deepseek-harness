@@ -216,7 +216,28 @@ export function ChatView({
       } else {
         el.scrollTop = saved.scrollTop
         const row = anchorElement(local, saved.anchorKey)
-        if (row !== null) el.scrollTop += flowTop(row, el) - saved.anchorTop
+        if (row !== null) {
+          el.scrollTop += flowTop(row, el) - saved.anchorTop
+        } else {
+          // The saved anchor row sits outside the window the restore
+          // rendered (the flow re-wrapped since the save, and the initial
+          // window covers only the viewport). Correct once the window
+          // materializes at the saved position, and once more after the
+          // list's next measure, so the wrap delta cannot strand the reader.
+          let corrected = false
+          const correct = (): void => {
+            if (corrected) return
+            const later = anchorElement(local, saved.anchorKey)
+            if (later === null) return
+            corrected = true
+            el.scrollTop += flowTop(later, el) - saved.anchorTop
+            observedTopRef.current = el.scrollTop
+          }
+          requestAnimationFrame(() => {
+            correct()
+            requestAnimationFrame(correct)
+          })
+        }
         observedTopRef.current = el.scrollTop
         const isAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight <= FOLLOW_THRESHOLD + 1
         atBottomRef.current = isAtBottom
@@ -318,16 +339,27 @@ export function ChatView({
   const followRef = useRef<(() => void) | null>(null)
   followRef.current = () => {
     const local = listRef.current
-    if (local !== null && atBottomRef.current) {
-      const el = scrollerOf(local)
+    if (local === null) return
+    const el = scrollerOf(local)
+    if (atBottomRef.current) {
       el.scrollTop = el.scrollHeight
       observedTopRef.current = el.scrollTop
       chatScroll.save(null)
+      return
     }
+    // Not pinned: a resize (width re-wrap, disclosure, streaming) moved the
+    // flow under the reader's feet, so the ledger's saved anchor coordinates
+    // are stale — re-record the position the reader actually holds, or the
+    // next session/tab restore compensates against the old flow and lands
+    // off by the wrap delta.
+    const position = scrollPosition(local, el)
+    if (position !== null) chatScroll.save(position)
+    observedTopRef.current = el.scrollTop
   }
   // Streaming, tool disclosures, and other flow changes resize the column;
   // the sticky composer resizes outside it. This observer owns ChatView's
-  // dynamic-height follow decisions and writes only while the reader is pinned.
+  // dynamic-height follow decisions: pinned readers snap to the floor,
+  // anchored readers re-record their ledger coordinates.
   useEffect(() => {
     const column = columnRef.current
     const local = listRef.current

@@ -15,7 +15,7 @@ import { act, cleanup, render } from '@testing-library/react'
 import { useSyncExternalStore } from 'react'
 import { AppFrame } from '@deepseek-ai/dsh-client-ui-layout/src/client/AppFrame.tsx'
 import type { AppFrameProps } from '@deepseek-ai/dsh-client-ui-layout/src/client/AppFrame.tsx'
-import { SIDEBAR_COLLAPSED } from '@deepseek-ai/dsh-client-ui-layout/src/client/columns.ts'
+import { SIDEBAR_COLLAPSED, SIDEBAR_DEFAULT } from '@deepseek-ai/dsh-client-ui-layout/src/client/columns.ts'
 import { createLayoutStore } from '@deepseek-ai/dsh-client-ui-layout/src/client/stores.ts'
 import type {
   SessionId, SessionListState, WorkspaceListState,
@@ -216,7 +216,7 @@ describe('AppFrame', () => {
 
   it('sidebar slot receives live concession output as owner props', () => {
     const { slotCalls } = mountFrame()
-    expect(slotCalls.find(c => c.key === 'sidebar')!.props).toEqual({ collapsed: false, width: 280 })
+    expect(slotCalls.find(c => c.key === 'sidebar')!.props).toEqual({ collapsed: false, width: 280, narrow: false })
   })
 
   it('sidebar drag widens through rAF-batched pointer moves', () => {
@@ -258,7 +258,7 @@ describe('AppFrame', () => {
     expect(getByTestId('sidebar-content')).toBeTruthy()
     expect(frame.hasAttribute('data-sidebar-collapsed')).toBe(true)
     const lastSidebarCall = slotCalls.filter(c => c.key === 'sidebar').at(-1)!
-    expect(lastSidebarCall.props).toEqual({ collapsed: true, width: SIDEBAR_COLLAPSED })
+    expect(lastSidebarCall.props).toEqual({ collapsed: true, width: SIDEBAR_COLLAPSED, narrow: false })
   })
 
   it('viewport shrink triggers the concession chain via ResizeObserver', () => {
@@ -290,29 +290,34 @@ describe('AppFrame — narrow-viewport auto-collapse', () => {
     const { frame, slotCalls } = mountFrame()
     expect(tracks(frame)).toEqual([SIDEBAR_COLLAPSED, 0])
     expect(frame.hasAttribute('data-sidebar-collapsed')).toBe(true)
-    expect(slotCalls.filter(c => c.key === 'sidebar').at(-1)!.props).toEqual({ collapsed: true, width: SIDEBAR_COLLAPSED })
+    expect(slotCalls.filter(c => c.key === 'sidebar').at(-1)!.props).toEqual({ collapsed: true, width: SIDEBAR_COLLAPSED, narrow: true })
     expect(frame.querySelectorAll('[class*="handle"]')).toHaveLength(0)
   })
 
-  it('narrow toggle re-expands over the squeezed center and back', () => {
+  it('narrow toggle opens the floating drawer and back', () => {
     frameWidth = 980
-    const { frame, instance } = mountFrame()
+    const { frame, instance, slotCalls } = mountFrame()
     act(() => { instance.actions.toggleSidebar() })
-    expect(tracks(frame)).toEqual([280, 0])
+    // The drawer overlays the conversation: no grid track, no handle, and
+    // the slot still receives the full drawer width.
+    expect(tracks(frame)).toEqual([0, 0])
     expect(frame.hasAttribute('data-sidebar-collapsed')).toBe(false)
-    expect(frame.querySelectorAll('[class*="handle"]')).toHaveLength(1)
+    expect(frame.querySelectorAll('[class*="handle"]')).toHaveLength(0)
+    expect(frame.querySelector('[data-sidebar-overlay]')).not.toBeNull()
+    expect(slotCalls.filter(c => c.key === 'sidebar').at(-1)!.props).toEqual({ collapsed: false, width: SIDEBAR_DEFAULT, narrow: true })
     act(() => { instance.actions.toggleSidebar() })
     expect(tracks(frame)).toEqual([SIDEBAR_COLLAPSED, 0])
   })
 
-  it('a wide-closed preference re-expands at the contract default while narrow', () => {
+  it('a wide-closed preference re-expands as the drawer while narrow', () => {
     frameWidth = 1920
     const { frame, instance } = mountFrame()
     act(() => { instance.actions.toggleSidebar() }) // close while wide: preference 0
     frameWidth = 980
     act(() => { fireResize?.(); vi.advanceTimersByTime(20) })
     act(() => { instance.actions.toggleSidebar() })
-    expect(tracks(frame)).toEqual([280, 0])
+    expect(tracks(frame)).toEqual([0, 0])
+    expect(frame.querySelector('[data-sidebar-overlay]')).not.toBeNull()
     expect(instance.getSnapshot().sidebar).toBe(0) // preference untouched
   })
 

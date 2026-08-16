@@ -21,16 +21,16 @@ afterEach(() => {
 // props share; stub them as never-called functions.
 const neverHook = (() => { throw new Error('shell must not read global hooks') }) as never
 
-function mountShell({ collapsed = false, width = 300 }: { collapsed?: boolean; width?: number } = {}) {
+function mountShell({ collapsed = false, width = 300, narrow = false }: { collapsed?: boolean; width?: number; narrow?: boolean } = {}) {
   const startSession = vi.fn()
   const toggleSidebar = vi.fn()
   let regionOwner: SidebarSectionOwnerProps | undefined
   let settingsOwner: SidebarSettingsOwnerProps | undefined
   let footerActionOwner: SidebarFooterActionOwnerProps | undefined
-  let current = { collapsed, width }
+  let current = { collapsed, width, narrow }
   const root = () => (
     <SidebarRoot
-      collapsed={current.collapsed} width={current.width}
+      collapsed={current.collapsed} width={current.width} narrow={narrow}
       useSessions={neverHook} useWorkspaces={neverHook}
       startSession={startSession} toggleSidebar={toggleSidebar} t={t}
       renderSlot={((
@@ -115,5 +115,43 @@ describe('SidebarRoot shell', () => {
     const b = mountShell({ collapsed: true })
     expect(b.regionOwner().wide).toBe(false)
     expect(screen.getByRole('button', { name: 'Open sidebar' })).toBeTruthy()
+  })
+
+  it('dismisses the narrow-expanded drawer on an outside click', () => {
+    const b = mountShell({ narrow: true })
+    // The inside/outside fact is captured at the press; the dismissal lands
+    // on the click so the gesture's own target survives the re-layout.
+    fireEvent.pointerDown(document.body)
+    fireEvent.click(document.body)
+    expect(b.toggleSidebar).toHaveBeenCalledOnce()
+  })
+
+  it('ignores outside clicks on wide columns and the collapsed rail', () => {
+    const wide = mountShell()
+    fireEvent.pointerDown(document.body)
+    fireEvent.click(document.body)
+    expect(wide.toggleSidebar).not.toHaveBeenCalled()
+    const rail = mountShell({ collapsed: true, narrow: true })
+    fireEvent.pointerDown(document.body)
+    fireEvent.click(document.body)
+    expect(rail.toggleSidebar).not.toHaveBeenCalled()
+  })
+
+  it('collapses the narrow drawer when a New Session starts', () => {
+    const b = mountShell({ narrow: true })
+    const starter = screen.getAllByRole('button', { name: 'New session' })[0]
+    if (starter === undefined) throw new Error('no New Session button')
+    fireEvent.click(starter)
+    expect(b.startSession).toHaveBeenCalledOnce()
+    expect(b.toggleSidebar).toHaveBeenCalledOnce()
+  })
+
+  it('hands the region a collapseSidebar that is narrow-only', () => {
+    const wide = mountShell()
+    wide.regionOwner().collapseSidebar()
+    expect(wide.toggleSidebar).not.toHaveBeenCalled()
+    const b = mountShell({ narrow: true })
+    b.regionOwner().collapseSidebar()
+    expect(b.toggleSidebar).toHaveBeenCalledOnce()
   })
 })
