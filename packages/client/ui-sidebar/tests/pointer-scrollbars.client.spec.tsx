@@ -39,7 +39,7 @@ afterEach(() => {
 function mountColumn(): { column: HTMLElement; quiet: () => boolean } {
   const view = render(
     <SidebarRoot
-      collapsed={false} width={300}
+      collapsed={false} width={300} narrow={false}
       useSessions={neverHook} useSessionStatus={useSessionStatus} useSessionRetainInfo={neverHook}
       usePanelInfo={usePanelInfo} selectPanel={() => {}} usePanels={selector => selector([])}
       useResource={useResource} useWorkspaces={neverHook}

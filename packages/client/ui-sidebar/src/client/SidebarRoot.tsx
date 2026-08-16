@@ -16,7 +16,7 @@
  * scrollbar indirection away while it is elsewhere, so a list the user is not
  * pointing at carries no bar.
  */
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import clsx from 'clsx'
 import {
   FishLogo, IconNewChatOutline16, IconPanelLeftOutline16, isDarwinDesktop, Tooltip,
@@ -88,6 +88,7 @@ function PanelRow({ id, label, wide, usePanelInfo, selectPanel, renderSlot }: Pa
 export function SidebarRoot({
   collapsed,
   width,
+  narrow,
   startSession,
   toggleSidebar,
   selectPanel,
@@ -162,6 +163,31 @@ export function SidebarRoot({
     }
   }, [pointerInside])
 
+  // The expanded narrow column floats as a drawer. Capture whether the press
+  // began inside it, then dismiss on click so the original target receives
+  // the complete gesture before the frame changes.
+  const pressInside = useRef(true)
+  const collapseNarrow = useCallback((): void => {
+    if (narrow && !collapsed) toggleSidebar()
+  }, [narrow, collapsed, toggleSidebar])
+  useEffect(() => {
+    if (!narrow || collapsed) return
+    pressInside.current = true
+    const onPointerDown = (event: PointerEvent): void => {
+      pressInside.current = event.target instanceof Node
+        && column.current?.contains(event.target) === true
+    }
+    const onOutsideClick = (): void => {
+      if (!pressInside.current) toggleSidebar()
+    }
+    document.addEventListener('pointerdown', onPointerDown, true)
+    document.addEventListener('click', onOutsideClick)
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown, true)
+      document.removeEventListener('click', onOutsideClick)
+    }
+  }, [narrow, collapsed, toggleSidebar])
+
   const buildVersion = localBuildVersion()
 
   const darwinDesktop = isDarwinDesktop()
@@ -213,7 +239,7 @@ export function SidebarRoot({
             type="button"
             className={clsx(css.brand, css.wide)}
             aria-label={t('session.new.label')}
-            onClick={() => { startSession() }}
+            onClick={() => { startSession(); collapseNarrow() }}
           >
             <span className={css.brandIdentity} aria-hidden="true">
               <span className={css.brandMark}>
@@ -243,7 +269,7 @@ export function SidebarRoot({
           type="button"
           className={css.newSession}
           aria-label={t('session.new.label')}
-          onClick={() => { startSession() }}
+          onClick={() => { startSession(); collapseNarrow() }}
         >
           <IconNewChatOutline16 size={wide ? 14 : windowsTitlebar ? 16 : 18} />
           {wide && <span className={clsx(css.newSessionLabel, css.wide)}>{t('session.new')}</span>}
@@ -272,6 +298,7 @@ export function SidebarRoot({
         {renderSlot('sidebar.workspaces', {
           wide,
           expandSidebar: () => { if (collapsed) toggleSidebar() },
+          collapseSidebar: collapseNarrow,
         })}
       </div>
 

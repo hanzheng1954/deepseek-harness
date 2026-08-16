@@ -92,6 +92,12 @@ export interface SidebarSectionOwnerProps {
   wide: boolean
   /** Rail icons request expansion; the browser rides the wide flip for focus. */
   expandSidebar: () => void
+  /**
+   * Dismiss the narrow drawer after a terminal navigation pick (opening a
+   * session), returning the screen to the conversation. No-op above the
+   * auto-collapse breakpoint.
+   */
+  collapseSidebar: () => void
 }
 
 /**

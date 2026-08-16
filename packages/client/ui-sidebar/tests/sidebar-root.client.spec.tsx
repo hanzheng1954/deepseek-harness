@@ -36,7 +36,7 @@ type AttentionSnapshot = Parameters<Parameters<SidebarRootComponentProps['useSes
 const noAttention: AttentionSnapshot = new Map()
 const useSessionStatus: SidebarRootComponentProps['useSessionStatus'] = selector => selector(noAttention)
 
-function mountShell({ collapsed = false, width = 300 }: { collapsed?: boolean; width?: number } = {}) {
+function mountShell({ collapsed = false, width = 300, narrow = false }: { collapsed?: boolean; width?: number; narrow?: boolean } = {}) {
   const startSession = vi.fn()
   const toggleSidebar = vi.fn()
   let regionOwner: SidebarSectionOwnerProps | undefined
@@ -44,10 +44,10 @@ function mountShell({ collapsed = false, width = 300 }: { collapsed?: boolean; w
   let footerActionOwner: SidebarFooterActionOwnerProps | undefined
   const brandMark = <span data-testid="custom-brand-mark">M</span>
   const brandName = <span data-testid="custom-brand-name">Custom Brand</span>
-  let current = { collapsed, width }
+  let current = { collapsed, width, narrow }
   const root = () => (
     <SidebarRoot
-      collapsed={current.collapsed} width={current.width}
+      collapsed={current.collapsed} width={current.width} narrow={current.narrow}
       useSessions={neverHook} useSessionStatus={useSessionStatus} useSessionRetainInfo={neverHook}
       usePanelInfo={usePanelInfo} selectPanel={() => {}} usePanels={selector => selector([])}
       useResource={useResource} useWorkspaces={neverHook}
@@ -114,7 +114,7 @@ describe('SidebarRoot shell', () => {
     vi.stubEnv('DSH_CLIENT_GIT_DIRTY', 'true')
     vi.stubEnv('DSH_CLIENT_VERSION', '1.2.3-rc.4')
     const { container } = render(<SidebarRoot
-      collapsed={false} width={300}
+      collapsed={false} width={300} narrow={false}
       useSessions={neverHook} useSessionStatus={useSessionStatus} useSessionRetainInfo={neverHook}
       usePanelInfo={usePanelInfo} selectPanel={() => {}} usePanels={selector => selector([])}
       useResource={useResource} useWorkspaces={neverHook}
@@ -134,7 +134,7 @@ describe('SidebarRoot shell', () => {
   ])('omits unavailable build-version suffixes from %j', (environment, expected) => {
     for (const [name, value] of Object.entries(environment)) vi.stubEnv(name, value)
     render(<SidebarRoot
-      collapsed={false} width={300}
+      collapsed={false} width={300} narrow={false}
       useSessions={neverHook} useSessionStatus={useSessionStatus} useSessionRetainInfo={neverHook}
       usePanelInfo={usePanelInfo} selectPanel={() => {}} usePanels={selector => selector([])}
       useResource={useResource} useWorkspaces={neverHook}
@@ -149,7 +149,7 @@ describe('SidebarRoot shell', () => {
 
   it('retains the local-build fallback without complete build metadata', () => {
     render(<SidebarRoot
-      collapsed={false} width={300}
+      collapsed={false} width={300} narrow={false}
       useSessions={neverHook} useSessionStatus={useSessionStatus} useSessionRetainInfo={neverHook}
       usePanelInfo={usePanelInfo} selectPanel={() => {}} usePanels={selector => selector([])}
       useResource={useResource} useWorkspaces={neverHook}
@@ -196,7 +196,7 @@ describe('SidebarRoot shell', () => {
   it('shows only the badge bubble while the rail badge is hovered inside the toggle', () => {
     vi.useFakeTimers()
     render(<SidebarRoot
-      collapsed width={56}
+      collapsed width={56} narrow={false}
       useSessions={neverHook} useSessionStatus={useSessionStatus} useSessionRetainInfo={neverHook}
       usePanelInfo={usePanelInfo} selectPanel={() => {}} usePanels={selector => selector([])}
       useResource={useResource} useWorkspaces={neverHook}
@@ -218,6 +218,44 @@ describe('SidebarRoot shell', () => {
     expect(screen.getByRole('tooltip').textContent).toBe('Open sidebar')
     fireEvent.mouseLeave(toggle)
     expect(screen.queryByRole('tooltip')).toBeNull()
+  })
+
+  it('dismisses the narrow-expanded drawer on an outside click', () => {
+    const shell = mountShell({ narrow: true })
+    fireEvent.pointerDown(document.body)
+    fireEvent.click(document.body)
+    expect(shell.toggleSidebar).toHaveBeenCalledOnce()
+  })
+
+  it('ignores outside clicks on wide columns and the collapsed rail', () => {
+    const wide = mountShell()
+    fireEvent.pointerDown(document.body)
+    fireEvent.click(document.body)
+    expect(wide.toggleSidebar).not.toHaveBeenCalled()
+
+    const rail = mountShell({ collapsed: true, narrow: true })
+    fireEvent.pointerDown(document.body)
+    fireEvent.click(document.body)
+    expect(rail.toggleSidebar).not.toHaveBeenCalled()
+  })
+
+  it('collapses the narrow drawer when a new session starts', () => {
+    const shell = mountShell({ narrow: true })
+    const starter = screen.getAllByRole('button', { name: 'New session' })[0]
+    if (starter === undefined) throw new Error('no New Session button')
+    fireEvent.click(starter)
+    expect(shell.startSession).toHaveBeenCalledOnce()
+    expect(shell.toggleSidebar).toHaveBeenCalledOnce()
+  })
+
+  it('hands the workspace region a narrow-only collapse action', () => {
+    const wide = mountShell()
+    wide.regionOwner().collapseSidebar()
+    expect(wide.toggleSidebar).not.toHaveBeenCalled()
+
+    const narrow = mountShell({ narrow: true })
+    narrow.regionOwner().collapseSidebar()
+    expect(narrow.toggleSidebar).toHaveBeenCalledOnce()
   })
 })
 

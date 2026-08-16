@@ -9,7 +9,7 @@
  * menu in between; the flow and its error dialog live in WorkspacePicker
  * (same package — direct composition, no slot between them).
  */
-import { type CSSProperties, type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
+import { type CSSProperties, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import clsx from 'clsx'
 import {
   Button, IconCloseFill14, IconPersonalizationOutline16,
@@ -765,6 +765,7 @@ export function WorkspaceBrowser({
   wide,
   usePanelInfo,
   expandSidebar,
+  collapseSidebar,
   useSessions,
   useSessionStatus,
   useWorkspaces,
@@ -787,6 +788,10 @@ export function WorkspaceBrowser({
   t,
 }: WorkspaceBrowserProps) {
   const home = useHostInfo(info => info.home)
+  const openAndDismiss = useCallback((sessionId: SessionId): void => {
+    open(sessionId)
+    collapseSidebar()
+  }, [open, collapseSidebar])
   // Ordering remains live while the rail or search replaces the list body.
   const list = useSessions(state => state)
   const workspaces = useWorkspaces(state => state.items)
@@ -922,7 +927,7 @@ export function WorkspaceBrowser({
     setRevealSessionId(sessionId)
     setQuery('')
     setSearchExpanded(false)
-    open(sessionId)
+    openAndDismiss(sessionId)
   }
   const acknowledgeSessionReveal = (sessionId: SessionId): void => {
     setRevealSessionId(current => current === sessionId ? undefined : current)
@@ -1265,7 +1270,7 @@ export function WorkspaceBrowser({
                 list={list}
                 sessionIds={orderedFlatSessionIds}
                 useSessionStatus={useSessionStatus}
-                open={open} forkSession={forkSession}
+                open={openAndDismiss} forkSession={forkSession}
                 onSessionRename={onSessionRename} onSessionArchive={onSessionArchive}
                 setSessionOrder={saveSessionOrder}
                 revealSessionId={revealSessionId}
@@ -1290,7 +1295,7 @@ export function WorkspaceBrowser({
                 setSessionOrder={saveSessionOrder}
                 archivedSessionIds={archivedSessionIds}
                 startSession={startSession}
-                open={open}
+                open={openAndDismiss}
                 insertWorkspaceBefore={insertWorkspaceBefore}
                 revealSessionId={revealSessionId}
                 onSessionRevealed={acknowledgeSessionReveal}

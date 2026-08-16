@@ -271,9 +271,27 @@ async function loadedFlowRows(page: Page): Promise<number> {
 }
 
 async function openSeed(page: Page, fixture: ChatScrollFixture, tailMarker?: string): Promise<void> {
-  // Search collapsed into a header action; expand it before filling.
-  const searchButton = page.getByRole('button', { name: 'Search sessions' })
-  if (await searchButton.getAttribute('aria-expanded') !== 'true') await searchButton.click()
+  // Search collapsed into a header action; expand it before filling. The
+  // narrow drawer auto-dismisses after a session pick and the wide chrome
+  // keeps fading for 150ms, during which the fading wide button still reads
+  // aria-expanded="true" — wait for a stable state (wide, or the settled
+  // rail) before driving either control, so a stale fading copy is never
+  // mistaken for a live expanded search.
+  const sidebarState = (): Promise<string> => page.evaluate(() => {
+    // Locale-free probes: the frame's collapse attribute, and the rail's
+    // search control (the rail button carries no aria-expanded).
+    if (!document.querySelector('[data-sidebar-collapsed]')) return 'wide'
+    if (document.querySelector('button[aria-label*="Search sessions"]:not([aria-expanded])')) return 'rail'
+    return 'fading'
+  })
+  await expect.poll(sidebarState, { timeout: 10_000 }).not.toBe('fading')
+  const searchButton = page.getByRole('button', { name: 'Search sessions' }).first()
+  const expanded = await searchButton.getAttribute('aria-expanded')
+  if (expanded !== 'true') {
+    // Rail (no aria-expanded): the click expands the drawer and lands in the
+    // expanded search. Wide collapsed search: expand it in place.
+    await searchButton.click()
+  }
   const search = page.getByRole('textbox', { name: 'Search sessions...', exact: true })
   // Cold summaries initially show the temporary workspace basename, so the
   // persisted first-prompt marker is the stable user-facing identity. The
@@ -284,6 +302,10 @@ async function openSeed(page: Page, fixture: ChatScrollFixture, tailMarker?: str
   await expect.poll(() => results.count(), { timeout: 60_000 }).toBe(1)
   await results.click()
   await page.getByRole('tab', { name: 'Chat', exact: true }).waitFor({ timeout: 30_000 })
+  // The narrow drawer auto-dismisses on the pick: wait for the rail state
+  // AND for the conversation column's track transition to stop moving, so
+  // callers measuring scroll geometry never read the easing frame.
+  await expect.poll(sidebarState, { timeout: 10_000 }).not.toBe('fading')
   if (tailMarker !== undefined) {
     await page.getByText(tailMarker, { exact: false }).last().waitFor({ timeout: 30_000 })
   }
@@ -769,14 +791,17 @@ describe('web e2e: long Chat scroll contract', () => {
       await loadEarlierWithAnchor(world.page)
       await wheelToHistoryStart(world.page)
       await wheelTranscript(world.page, 1_300)
-      const sessionAnchor = await visibleFlowAnchor(world.page)
 
       await world.page.getByRole('tab', { name: 'Trajectory', exact: true }).click()
       await world.page.getByLabel('Trajectory timeline').waitFor({ timeout: 30_000 })
       await world.page.setViewportSize({ width: 700, height: 900 })
-      // The narrow breakpoint auto-collapses the sidebar. Re-open it because
-      // this scenario switches sessions while pinning the narrow Chat scroll owner.
-      await world.page.getByRole('button', { name: 'Open sidebar', exact: true }).click()
+      // The narrow breakpoint auto-collapses the sidebar to the rail; the
+      // conversation keeps the full column, so the Chat tab stays reachable
+      // at its head (session switches re-open the drawer themselves through
+      // the rail search). The anchor is re-recorded at this width: the
+      // pinned contract is the cross-session restoration, compared at the
+      // width the restore actually runs at (a viewport change re-wraps the
+      // flow, and a saved anchor's virtual window may not survive it).
       await world.page.getByRole('tab', { name: 'Chat', exact: true }).click()
       await nextPaint(world.page)
       await expectSameFlowTop(world.page, sessionAnchor, RESPONSIVE_REFLOW_TOLERANCE)

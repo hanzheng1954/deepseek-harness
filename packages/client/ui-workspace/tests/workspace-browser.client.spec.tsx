@@ -90,6 +90,7 @@ function mount(overrides: Partial<WorkspaceBrowserProps> = {}) {
   const props: WorkspaceBrowserProps = {
     wide: true,
     expandSidebar: vi.fn(),
+    collapseSidebar: vi.fn(),
     useSessions: hook(sessionState([])),
     useSessionStatus: hook(noPendingInteraction),
     useSessionRetainInfo: () => undefined,
@@ -530,6 +531,21 @@ describe('WorkspaceBrowser', () => {
     // Collapse hides the row again.
     fireEvent.click(screen.getByText('alpha'))
     expect(screen.queryByText('alpha-s')).toBeNull()
+  })
+
+  it('dismisses the narrow drawer alongside opening a session', () => {
+    const open = vi.fn()
+    const collapseSidebar = vi.fn()
+    mount({
+      useSessions: hook(sessionState([summary('alpha-s', 1)])),
+      useWorkspaces: hook(workspaceState([workspace('alpha', ['alpha-s'])])),
+      open,
+      collapseSidebar,
+    })
+    fireEvent.click(screen.getByText('alpha'))
+    fireEvent.click(screen.getByText('alpha-s'))
+    expect(open).toHaveBeenCalledWith(sid('alpha-s'))
+    expect(collapseSidebar).toHaveBeenCalledOnce()
   })
 
   it('shows five sessions by default and clears transient show-all when the Workspace collapses', () => {

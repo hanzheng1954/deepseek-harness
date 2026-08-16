@@ -481,7 +481,25 @@ export function ChatView({
       } else {
         el.scrollTop = saved.scrollTop
         const row = anchorElement(local, saved.anchorKey)
-        if (row !== null) el.scrollTop += flowTop(row, el) - saved.anchorTop
+        if (row !== null) {
+          el.scrollTop += flowTop(row, el) - saved.anchorTop
+        } else {
+          // The saved row may materialize after the first virtual window. Apply
+          // one correction after that window and its next measurement render.
+          let corrected = false
+          const correct = (): void => {
+            if (corrected) return
+            const later = anchorElement(local, saved.anchorKey)
+            if (later === null) return
+            corrected = true
+            el.scrollTop += flowTop(later, el) - saved.anchorTop
+            observedTopRef.current = el.scrollTop
+          }
+          requestAnimationFrame(() => {
+            correct()
+            requestAnimationFrame(correct)
+          })
+        }
         observedTopRef.current = el.scrollTop
         const isAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight <= FOLLOW_THRESHOLD + 1
         atBottomRef.current = isAtBottom
@@ -623,16 +641,23 @@ export function ChatView({
   followRef.current = () => {
     if (scrollSamplePendingRef.current) return
     const local = listRef.current
-    if (local !== null && atBottomRef.current) {
-      const el = scrollerOf(local)
+    if (local === null) return
+    const el = scrollerOf(local)
+    if (atBottomRef.current) {
       el.scrollTop = el.scrollHeight
       observedTopRef.current = el.scrollTop
       chatScroll.save(null)
+      return
     }
+    // Reflow can move the semantic row under an anchored reader without a
+    // scroll event. Re-record the coordinates used by the next restoration.
+    const position = scrollPosition(local, el)
+    if (position !== null) chatScroll.save(position)
+    observedTopRef.current = el.scrollTop
   }
   // Streaming, tool disclosures, and other flow changes resize the column;
-  // the sticky composer resizes outside it. This observer owns ChatView's
-  // dynamic-height follow decisions and writes only while the reader is pinned.
+  // the sticky composer resizes outside it. This observer follows pinned
+  // readers and refreshes anchored readers' saved coordinates.
   useEffect(() => {
     const column = columnRef.current
     const local = listRef.current

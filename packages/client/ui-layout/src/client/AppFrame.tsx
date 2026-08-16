@@ -169,7 +169,15 @@ export function AppFrame({
   // Opening on a narrow frame collapses the left sidebar. Eligibility must
   // include that space before the occupant's first shown report arrives.
   const normal = computeColumns(viewport, !layoutInfo.rightbarShown && narrow ? 0 : sidebarPreference, rightbarPreference, collapsedWidth)
-  const cols = computeColumns(viewport, sidebarPreference, layoutInfo.rightbarTrack ? rightbarPreference : 0, collapsedWidth)
+  // A manually expanded narrow sidebar is a drawer: the grid yields no track,
+  // while the sidebar occupant retains the normal expanded width.
+  const overlaySidebar = narrow && !sidebarCollapsed
+  const cols = computeColumns(
+    viewport,
+    overlaySidebar ? 0 : sidebarPreference,
+    layoutInfo.rightbarTrack ? rightbarPreference : 0,
+    overlaySidebar ? 0 : collapsedWidth,
+  )
   const colsRef = useRef(cols)
   colsRef.current = cols
   const rightbarWidth = useRef(normal.rightbar)
@@ -195,8 +203,9 @@ export function AppFrame({
   const productTitle = process.env.DSH_CLIENT_TITLE ?? t('brand.localBuild')
   const sidebar = useMemo(() => renderSlot('sidebar', {
     collapsed: sidebarCollapsed,
-    width: cols.sidebar,
-  }), [renderSlot, sidebarCollapsed, cols.sidebar])
+    width: overlaySidebar ? SIDEBAR_DEFAULT : cols.sidebar,
+    narrow,
+  }), [renderSlot, sidebarCollapsed, overlaySidebar, cols.sidebar, narrow])
   const main = useMemo(() => (
     <MainPanel usePanelInfo={usePanelInfo} renderSlot={renderSlot} />
   ), [usePanelInfo, renderSlot])
@@ -223,7 +232,7 @@ export function AppFrame({
         useSessions={useSessions}
         usePanelInfo={usePanelInfo}
       />
-      <div className={css.sidebarCol}>
+      <div className={css.sidebarCol} data-sidebar-overlay={overlaySidebar || undefined}>
         {sidebar}
       </div>
       <>
@@ -235,8 +244,8 @@ export function AppFrame({
       <div className={css.overlayLayer} data-shell-overlay>
         {overlays}
       </div>
-      {/* The collapsed rail is fixed-width: no resize handle while closed. */}
-      {!sidebarCollapsed && <DragHandle side="sidebar" left={cols.sidebar} onStart={onSidebarStart} onDrag={onSidebarDrag} onEnd={onDragEnd} />}
+      {/* The collapsed rail and the narrow drawer are fixed-width. */}
+      {!sidebarCollapsed && !narrow && <DragHandle side="sidebar" left={cols.sidebar} onStart={onSidebarStart} onDrag={onSidebarDrag} onEnd={onDragEnd} />}
       {layoutInfo.rightbarShown && !layoutInfo.rightbarFullscreen && normal.rightbar > 0 && (
         <DragHandle side="rightbar" left={viewport - normal.rightbar} onStart={onRightbarStart} onDrag={onRightbarDrag} onEnd={onDragEnd} />
       )}
