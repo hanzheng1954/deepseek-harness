@@ -60,6 +60,7 @@ kind: "package-reference"
         api: openai-completions
         baseURL: https://gateway.acme.example/v1
         # 仅接受官方客户端身份的网关可用此值替换 Harness attribution UA。
+        # 声明 Codex 来源的 Responses 路由会自动采用官方 Codex UA。
         userAgent: codex_cli_rs/0.146.2
         compat:
           thinkingFormat: deepseek

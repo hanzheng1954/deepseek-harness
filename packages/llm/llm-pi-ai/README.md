@@ -60,7 +60,8 @@ Each profile may set a `retryPolicy`; omission uses normal mode with five retrie
         api: openai-completions
         baseURL: https://gateway.acme.example/v1
         # Replaces the Harness attribution UA for a gateway that admits only
-        # an official client identity.
+        # an official client identity. Codex-origin Responses routes get the
+        # official Codex UA automatically.
         userAgent: codex_cli_rs/0.146.2
         compat:
           thinkingFormat: deepseek
