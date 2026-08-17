@@ -21,7 +21,7 @@ import type {
   SubprocessTerminalHandle,
   SubprocessTerminalSpawnSpec,
 } from '@deepseek-ai/dsh-subprocess'
-import { childEnv, spawnSubprocess } from './spawn.ts'
+import { childEnv, removeDefaultSpillDirSync, spawnSubprocess } from './spawn.ts'
 import type { LocalSubprocessHandle, SpawnInternals } from './spawn.ts'
 import { createProcessInspector } from './process-inspector.ts'
 import type { ProcessInspector } from './process-inspector.ts'
@@ -47,7 +47,10 @@ export class LocalSubprocessRuntime extends SubprocessRuntime {
   constructor(ctx: Context) {
     super(ctx)
     ctx.effect(() => {
-      const onHostExit = (): void => { this.terminateForHostExit() }
+      const onHostExit = (): void => {
+        this.terminateForHostExit()
+        removeDefaultSpillDirSync()
+      }
       process.prependListener('exit', onHostExit)
       return async () => {
         try {
@@ -97,6 +100,9 @@ export class LocalSubprocessRuntime extends SubprocessRuntime {
     if (failures.length > 0) this.terminateForHostExit()
     this.live.clear()
     this.terminals.clear()
+    // Remove the default spill directory once per process after the trees it
+    // served have settled (best-effort: open handles and locks are tolerated).
+    removeDefaultSpillDirSync()
     if (failures.length === 1) throw failures[0]
     if (failures.length > 1) throw new AggregateError(failures, 'local subprocess teardown failed')
   }

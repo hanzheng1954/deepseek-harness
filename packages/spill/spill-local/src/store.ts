@@ -9,7 +9,7 @@
  */
 
 import { createHash, randomBytes } from 'node:crypto'
-import { mkdtempSync } from 'node:fs'
+import { lstatSync, mkdtempSync, rmSync } from 'node:fs'
 import { mkdir, open } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -27,6 +27,39 @@ let defaultRoot: string | undefined
 export function privateRoot(): string {
   defaultRoot ??= mkdtempSync(join(tmpdir(), 'dsh-spill-'))
   return defaultRoot
+}
+
+/**
+ * Remove a temp directory this module created, refusing to descend through a
+ * link-shaped path that replaced it: a real directory is removed recursively,
+ * anything else is unlinked without traversal. Best-effort — absence, a
+ * swapped path, and platform locks are swallowed so teardown never fails on
+ * temp cleanup.
+ * @param path - the absolute directory to remove; undefined is a no-op.
+ */
+function removeOwnedTempDirSync(path: string | undefined): void {
+  if (path === undefined) return
+  try {
+    const info = lstatSync(path)
+    if (info.isDirectory()) {
+      rmSync(path, { recursive: true, force: true })
+    } else {
+      rmSync(path, { force: true })
+    }
+  } catch {
+    // Absence, races, and platform locks must not fail teardown.
+  }
+}
+
+/**
+ * Best-effort synchronous removal of the default private spill root, once.
+ * Resets the module-level default so a later `privateRoot()` call creates a
+ * fresh directory instead of reusing the removed path.
+ */
+export function removePrivateRootSync(): void {
+  const root = defaultRoot
+  defaultRoot = undefined
+  removeOwnedTempDirSync(root)
 }
 
 // Deliberately mirrors the JSONL path encoder, but keeps spill's empty-name

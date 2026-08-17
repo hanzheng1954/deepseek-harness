@@ -1,10 +1,11 @@
 import { PassThrough } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
+import { existsSync, rmSync, writeFileSync } from 'node:fs'
 import { basename, dirname, relative, resolve } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import LocalSubprocessRuntime from '@deepseek-ai/dsh-subprocess-local'
 import type { SubprocessSpawnSpec, SubprocessTerminalHandle, SubprocessTerminalSpawnSpec } from '@deepseek-ai/dsh-subprocess'
-import { childEnv } from '../src/spawn.ts'
+import { childEnv, removeDefaultSpillDirSync } from '../src/spawn.ts'
 
 function spec(command: string, overrides: Partial<SubprocessSpawnSpec> = {}): SubprocessSpawnSpec {
   return {
@@ -18,6 +19,27 @@ function spec(command: string, overrides: Partial<SubprocessSpawnSpec> = {}): Su
     graceMs: 200,
     ...overrides,
   }
+}
+
+/** A command that emits enough output to force a spill file under the default spill dir. */
+function spillSpec(): SubprocessSpawnSpec {
+  return spec("head -c 1000 /dev/zero | tr '\\0' a", {
+    stdio: {
+      stdin: 'ignore',
+      stdout: { maxBytes: 64, spill: { maxBytes: 1024 * 1024 } },
+      stderr: { maxBytes: 64, spill: { maxBytes: 1024 * 1024 } },
+    },
+  })
+}
+
+/** Spawn a spilling command and resolve the default spill directory its spill file landed in. */
+async function spillDirOf(ctx: Context): Promise<string> {
+  const handle = ctx.subprocess.spawn(spillSpec())
+  const outcome = await handle.done
+  expect(outcome.exitCode).toBe(0)
+  const spillPath = handle.collected.stdout!.readFrom(0).spillPath
+  expect(spillPath).toBeTypeOf('string')
+  return dirname(spillPath!)
 }
 
 describe('LocalSubprocessRuntime', () => {
@@ -426,6 +448,49 @@ describe('LocalSubprocessRuntime', () => {
     const handle = ctx.subprocess.spawn(spec('true', { cwd: '/nonexistent-dir-dsh-subprocess-test' }))
     await fiber.dispose()
     await expect(handle.done).rejects.toThrow()
+  })
+
+  it('removes the default spill directory on disposal', async () => {
+    const ctx = new Context()
+    const fiber = await ctx.plugin(LocalSubprocessRuntime)
+    const dir = await spillDirOf(ctx)
+    expect(existsSync(dir)).toBe(true)
+    await fiber.dispose()
+    expect(existsSync(dir)).toBe(false)
+  })
+
+  it('the host-exit finalizer removes the default spill directory', async () => {
+    const before = new Set(process.listeners('exit'))
+    const ctx = new Context()
+    const fiber = await ctx.plugin(LocalSubprocessRuntime)
+    const finalizer = process.listeners('exit').find(candidate => !before.has(candidate))
+    expect(finalizer).toBeTypeOf('function')
+    const dir = await spillDirOf(ctx)
+    expect(existsSync(dir)).toBe(true)
+    finalizer?.(0)
+    expect(existsSync(dir)).toBe(false)
+    await fiber.dispose()
+  })
+
+  it('unlinks a non-directory planted at the default spill path without traversal', async () => {
+    const ctx = new Context()
+    const fiber = await ctx.plugin(LocalSubprocessRuntime)
+    const dir = await spillDirOf(ctx)
+    rmSync(dir, { recursive: true, force: true })
+    writeFileSync(dir, 'planted')
+    removeDefaultSpillDirSync()
+    expect(existsSync(dir)).toBe(false)
+    await fiber.dispose()
+  })
+
+  it('tolerates an absent default spill directory and a cleared default', async () => {
+    const ctx = new Context()
+    const fiber = await ctx.plugin(LocalSubprocessRuntime)
+    const dir = await spillDirOf(ctx)
+    rmSync(dir, { recursive: true, force: true })
+    expect(() => { removeDefaultSpillDirSync() }).not.toThrow()
+    expect(() => { removeDefaultSpillDirSync() }).not.toThrow()
+    await fiber.dispose()
   })
 
   it('loading a second implementation throws (one processes service per context — cordis standard)', async () => {

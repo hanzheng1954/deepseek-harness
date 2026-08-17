@@ -8,13 +8,19 @@
 
 import { describe, expect, it, beforeEach, afterEach } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, dirname, isAbsolute, join, normalize } from 'node:path'
 import { CallId } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import type { SaveTextSpill } from '@deepseek-ai/dsh-spill'
-import LocalSpillStore, { encodeSegment, privateRoot, saveTextFile, sessionDir } from '@deepseek-ai/dsh-spill-local'
+import LocalSpillStore, {
+  encodeSegment,
+  privateRoot,
+  removePrivateRootSync,
+  saveTextFile,
+  sessionDir,
+} from '@deepseek-ai/dsh-spill-local'
 
 let root: string
 
@@ -112,6 +118,31 @@ describe('privateRoot', () => {
   })
 })
 
+describe('removePrivateRootSync', () => {
+  it('removes the default private root and resets the module default', () => {
+    const first = privateRoot()
+    writeFileSync(join(first, 'spilled.txt'), 'x')
+    removePrivateRootSync()
+    expect(existsSync(first)).toBe(false)
+    expect(privateRoot()).not.toBe(first)
+  })
+
+  it('unlinks a non-directory planted at the root path without traversal', () => {
+    const first = privateRoot()
+    rmSync(first, { recursive: true, force: true })
+    writeFileSync(first, 'planted')
+    removePrivateRootSync()
+    expect(existsSync(first)).toBe(false)
+  })
+
+  it('tolerates an absent root and a cleared default', () => {
+    const first = privateRoot()
+    rmSync(first, { recursive: true, force: true })
+    expect(() => { removePrivateRootSync() }).not.toThrow()
+    expect(() => { removePrivateRootSync() }).not.toThrow()
+  })
+})
+
 describe('LocalSpillStore service', () => {
   it('registers as ctx.spillStore and saves under the configured root', async () => {
     const ctx = new Context()
@@ -133,6 +164,35 @@ describe('LocalSpillStore service', () => {
     const ctx = new Context()
     await ctx.plugin(LocalSpillStore, {})
     expect((ctx.spillStore as LocalSpillStore).root).toBe(privateRoot())
+  })
+
+  it('removes the private default root on disposal', async () => {
+    const ctx = new Context()
+    const fiber = await ctx.plugin(LocalSpillStore, {})
+    const owned = (ctx.spillStore as LocalSpillStore).root
+    expect(existsSync(owned)).toBe(true)
+    await fiber.dispose()
+    expect(existsSync(owned)).toBe(false)
+  })
+
+  it('keeps a configured root on disposal', async () => {
+    const ctx = new Context()
+    const fiber = await ctx.plugin(LocalSpillStore, { root })
+    await fiber.dispose()
+    expect(existsSync(root)).toBe(true)
+  })
+
+  it('registers a host-exit finalizer that removes the private default root', async () => {
+    const before = new Set(process.listeners('exit'))
+    const ctx = new Context()
+    const fiber = await ctx.plugin(LocalSpillStore, {})
+    const owned = (ctx.spillStore as LocalSpillStore).root
+    expect(existsSync(owned)).toBe(true)
+    const finalizer = process.listeners('exit').find(candidate => !before.has(candidate))
+    expect(finalizer).toBeTypeOf('function')
+    finalizer?.(0)
+    expect(existsSync(owned)).toBe(false)
+    await fiber.dispose()
   })
 
   it('rejects when the root is not writable (missing parent, exclusive open)', async () => {

@@ -13,9 +13,9 @@ import { resolve } from 'node:path'
 import z from '@deepseek-ai/schemastery'
 import { SpillLocator, SpillStore } from '@deepseek-ai/dsh-spill'
 import type { SaveTextSpill, SpillRef } from '@deepseek-ai/dsh-spill'
-import { privateRoot, saveTextFile } from './store.ts'
+import { privateRoot, removePrivateRootSync, saveTextFile } from './store.ts'
 
-export { encodeSegment, privateRoot, saveTextFile, sessionDir } from './store.ts'
+export { encodeSegment, privateRoot, removePrivateRootSync, saveTextFile, sessionDir } from './store.ts'
 export type { SavedText, SaveTextOptions } from './store.ts'
 
 /** Plugin config (all optional — `static Config` supplies the defaults). */
@@ -23,7 +23,9 @@ export interface Config {
   /**
    * Root directory for spill files. Omitted uses a lazily-created private
    * (0700) per-process directory under the OS temp dir — the safe default for
-   * a local deployment. Set it to keep spill files under a known location.
+   * a local deployment, removed again on context disposal or process exit.
+   * Set it to keep spill files under a known location; the store never
+   * removes a configured root.
    */
   root?: string
 }
@@ -44,7 +46,23 @@ export class LocalSpillStore extends SpillStore {
 
   constructor(ctx: Context, config: Config) {
     super(ctx)
-    this.root = config.root !== undefined ? resolve(config.root) : privateRoot()
+    if (config.root !== undefined) {
+      // A configured root is the deployment's own storage; the store never removes it.
+      this.root = resolve(config.root)
+      return
+    }
+    this.root = privateRoot()
+    // The private default root is per-process scratch: remove it when the
+    // owning context disposes (graceful path) or when the process exits
+    // without disposing first (synchronous fallback).
+    ctx.effect(() => {
+      const onHostExit = (): void => { removePrivateRootSync() }
+      process.prependListener('exit', onHostExit)
+      return () => {
+        process.off('exit', onHostExit)
+        removePrivateRootSync()
+      }
+    }, 'local spill root teardown')
   }
 
   async saveText(input: SaveTextSpill): Promise<SpillRef> {

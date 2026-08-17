@@ -10,7 +10,7 @@
 import { type ChildProcess, spawn, spawnSync } from 'node:child_process'
 import type { Readable } from 'node:stream'
 import { randomBytes } from 'node:crypto'
-import { closeSync, mkdtempSync, openSync, unlinkSync, writeSync } from 'node:fs'
+import { closeSync, lstatSync, mkdtempSync, openSync, rmSync, unlinkSync, writeSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { setTimeout as sleepMs } from 'node:timers/promises'
@@ -81,6 +81,10 @@ function sleepTick(): Promise<void> {
 let spillCounter = 0
 let defaultSpillDir: string | undefined
 
+// The trio below deliberately mirrors @deepseek-ai/dsh-spill-local's private
+// root and removal guard; each seam owns its scratch directory and shares no
+// module for a dozen lines.
+/* jscpd:ignore-start */
 /**
  * The default spill location: a private (0700) per-process directory under
  * the OS tmpdir, created lazily. Predictable world-readable paths would let
@@ -90,6 +94,40 @@ function privateSpillDir(): string {
   defaultSpillDir ??= mkdtempSync(join(tmpdir(), 'dsh-subprocess-'))
   return defaultSpillDir
 }
+
+/**
+ * Remove a temp directory this module created, refusing to descend through a
+ * link-shaped path that replaced it: a real directory is removed recursively,
+ * anything else is unlinked without traversal. Best-effort — absence, a
+ * swapped path, and Windows locks are swallowed so teardown never fails on
+ * temp cleanup.
+ * @param path - the absolute directory to remove; undefined is a no-op.
+ */
+function removeOwnedTempDirSync(path: string | undefined): void {
+  if (path === undefined) return
+  try {
+    const info = lstatSync(path)
+    if (info.isDirectory()) {
+      rmSync(path, { recursive: true, force: true })
+    } else {
+      rmSync(path, { force: true })
+    }
+  } catch {
+    // Absence, races, and platform locks must not fail process teardown.
+  }
+}
+
+/**
+ * Best-effort synchronous removal of the default private spill directory,
+ * once. Resets the module-level default so a later spawn creates a fresh
+ * directory instead of reusing the removed path.
+ */
+export function removeDefaultSpillDirSync(): void {
+  const dir = defaultSpillDir
+  defaultSpillDir = undefined
+  removeOwnedTempDirSync(dir)
+}
+/* jscpd:ignore-end */
 
 /**
  * Collects one stream with a bounded in-memory tail. With a spill cap, on
