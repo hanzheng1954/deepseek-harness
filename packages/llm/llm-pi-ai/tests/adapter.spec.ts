@@ -13,8 +13,9 @@ import { PiAiAdapter } from '@deepseek-ai/dsh-llm-pi-ai'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { getBuiltinModels } from '@earendil-works/pi-ai/providers/all'
 import { resolveProfiles } from '../src/config.ts'
+import { CODEX_RESPONSES_USER_AGENT } from '../src/adapter.ts'
 import { assemble } from './assemble.ts'
-import { closeMockServers, mockServer, textEvents } from './mock-server.ts'
+import { closeMockServers, mockServer, responsesTextEvents, textEvents } from './mock-server.ts'
 
 afterEach(async () => {
   vi.unstubAllEnvs()
@@ -94,6 +95,21 @@ describe('PiAiAdapter provider routing', () => {
     await assemble(ctx, { model: 'deepseek-v4-flash', messages: [] })
     expect(server.headers[0]?.['user-agent']).toBe('codex_cli_rs/0.146.2')
     expect(server.headers[0]?.['x-company']).toBe('private')
+  })
+
+  it('pins the official Codex user-agent automatically on openai-responses routes', async () => {
+    const server = await mockServer([{ sse: responsesTextEvents }])
+    const ctx = await harness(server.url, { api: 'openai-responses' })
+    const result = await assemble(ctx, {
+      model: 'deepseek-v4-flash',
+      messages: [createUserMessage({
+        content: [{ type: 'text', text: 'hi' }],
+        source: { kind: 'plugin', plugin: 'test' },
+      })],
+    })
+    expect(result.message.content).toEqual([{ type: 'text', text: 'hello' }])
+    expect(server.paths).toEqual(['/responses'])
+    expect(server.headers[0]?.['user-agent']).toBe(CODEX_RESPONSES_USER_AGENT)
   })
 
   it('forwards common stream options and profile reasoning', async () => {

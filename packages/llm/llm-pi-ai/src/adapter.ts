@@ -174,6 +174,15 @@ function reasoningInfo(
 }
 
 /**
+ * Official Codex client identity pinned automatically on `openai-responses`
+ * requests whose route names no explicit profile `userAgent` override.
+ * Gateways that only serve official Codex clients reject other identities,
+ * so the Responses wire defaults to this UA; every other protocol keeps the
+ * Harness attribution UA unless a profile overrides it.
+ */
+export const CODEX_RESPONSES_USER_AGENT = 'codex_cli_rs/0.146.2'
+
+/**
  * Merge deployment headers while removing case-insensitive attribution collisions.
  * A configured `userAgent` is the one deliberate exception: it replaces the
  * attribution `user-agent` rather than being filtered with the other reserved
@@ -336,8 +345,14 @@ export class PiAiAdapter extends LlmAdapter {
         signal: watchdog.signal,
         // Profile headers are deployment-owned; attribution names are
         // Harness-owned and therefore win collisions, except a configured
-        // `userAgent`, which deliberately replaces the attribution UA.
-        headers: requestHeaders(profile.headers, profile.userAgent),
+        // `userAgent`, which deliberately replaces the attribution UA. The
+        // Responses wire without one automatically pins the official Codex
+        // client UA — gateways behind that wire commonly refuse other
+        // identities — while every other protocol keeps Harness attribution.
+        headers: requestHeaders(
+          profile.headers,
+          profile.userAgent ?? (model.api === 'openai-responses' ? CODEX_RESPONSES_USER_AGENT : undefined),
+        ),
       })
       const iterator = toStreamChunks(events, model.contextWindow)[Symbol.asyncIterator]()
       let exhausted = false
