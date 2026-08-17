@@ -59,6 +59,9 @@ Each profile may set a `retryPolicy`; omission uses normal mode with five retrie
         apiKeyEnv: ACME_GATEWAY_API_KEY
         api: openai-completions
         baseURL: https://gateway.acme.example/v1
+        # Replaces the Harness attribution UA for a gateway that admits only
+        # an official client identity.
+        userAgent: codex_cli_rs/0.146.2
         compat:
           thinkingFormat: deepseek
         models:
@@ -76,6 +79,7 @@ Each profile may set a `retryPolicy`; omission uses normal mode with five retrie
 | `displayName` | provider name | Label shown by selector surfaces |
 | `api` | catalog protocol | Wire protocol; only needed for routes the catalog does not supply |
 | `baseURL` | catalog endpoint | Endpoint of every model on the route |
+| `userAgent` | Harness attribution | Optional route-wide `User-Agent` override for an official-client-pinned gateway |
 | `models` | installed catalog | Replaces the route's catalog wholesale; each entry defaults from the installed model |
 | `modelOverrides` | none | Reshapes individual installed-catalog models without replacing the rest |
 | `compat` | catalog detection | Wire-compatibility switches for unrecognized endpoints |
@@ -100,7 +104,7 @@ A profile's `models` list replaces the route's installed catalog rather than ext
 
 `reasoningEfforts` declares a model's selectable thinking levels: each key is a level selectors offer, its value the spelling dispatch sends on the wire, so `max: ultra` renames a level for a gateway with its own vocabulary. Omitting the field keeps the installed catalog entry's capability; `false` declares a non-reasoning model. `compat` switches reshape the request for endpoints pi-ai cannot recognize — which role carries the system prompt, which field caps output, how a thinking level travels — configurable per route and per model. A model neither the entry nor the installed catalog sizes takes the route's `defaultContextWindow` and `defaultMaxTokens` fallbacks.
 
-For self-hosted Chat Completions endpoints, `thinkingTokenBudgetField` selects the reasoning-budget parameter, and `vllmPriority` sets an integer scheduler priority when the server enables priority scheduling. Template arguments accept `$var: thinking.budget`. `openai-responses` gateways can set `supportsMaxOutputTokens: false` to omit `max_output_tokens`; Azure and Codex transports ignore this shared compatibility field. These controls are opt-in; catalog-owned Anthropic effort and fallback capabilities are not configurable switches.
+For self-hosted Chat Completions endpoints, `thinkingTokenBudgetField` selects the reasoning-budget parameter, and `vllmPriority` sets an integer scheduler priority when the server enables priority scheduling. Template arguments accept `$var: thinking.budget`. `openai-responses` gateways can set `supportsMaxOutputTokens: false` to omit `max_output_tokens`; Azure and Codex transports ignore this shared compatibility field. These controls are opt-in; catalog-owned Anthropic effort and fallback capabilities are not configurable switches. `userAgent` is the dedicated exception to attribution-header precedence: when present, it replaces the Harness `User-Agent` after profile `headers` are filtered, while every other reserved attribution name remains Harness-owned.
 
 ### Change configuration at runtime
 

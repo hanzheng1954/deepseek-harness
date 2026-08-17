@@ -59,6 +59,8 @@ kind: "package-reference"
         apiKeyEnv: ACME_GATEWAY_API_KEY
         api: openai-completions
         baseURL: https://gateway.acme.example/v1
+        # 仅接受官方客户端身份的网关可用此值替换 Harness attribution UA。
+        userAgent: codex_cli_rs/0.146.2
         compat:
           thinkingFormat: deepseek
         models:
@@ -76,6 +78,7 @@ kind: "package-reference"
 | `displayName` | 提供方名 | 选择器界面显示的标签 |
 | `api` | 目录协议 | 协议格式；仅目录不提供的路由需要 |
 | `baseURL` | 目录端点 | 路由上所有模型的端点 |
+| `userAgent` | Harness attribution | 可选的路由级 `User-Agent` 覆盖，供只接受官方客户端身份的网关使用 |
 | `models` | 已安装目录 | 整体替换路由目录；每个条目从已安装模型取默认值 |
 | `modelOverrides` | 无 | 重塑个别已安装目录模型，而不替换其余模型 |
 | `compat` | 目录检测 | 无法识别端点的协议兼容开关 |
@@ -100,7 +103,7 @@ profile 的 `models` 列表会替换而非扩展路由的已安装目录；每�
 
 `reasoningEfforts` 声明模型可选择的 thinking 等级：每个键都是选择器提供的等级，其值是分派时在协议中发送的拼写，因此 `max: ultra` 可以为拥有自有词汇的网关重命名等级。省略该字段时保留已安装目录条目的能力；`false` 声明非推理模型。对于 pi-ai 无法识别的端点，`compat` 开关重塑请求——哪个角色携带系统提示词、哪个字段限制输出、thinking 等级如何传递——可逐路由、逐模型配置。条目与已安装目录都没有尺寸的模型，会采用路由的 `defaultContextWindow` 与 `defaultMaxTokens` 回退值。
 
-对于自托管 Chat Completions 端点，`thinkingTokenBudgetField` 选择推理预算参数，`vllmPriority` 在服务端启用优先级调度时设置整数调度优先级。模板参数接受 `$var: thinking.budget`。`openai-responses` 网关可设置 `supportsMaxOutputTokens: false` 来省略 `max_output_tokens`；Azure 与 Codex 传输会忽略这个共享兼容字段。这些控制均需显式启用；目录拥有的 Anthropic effort 和回退能力不是可配置开关。
+对于自托管 Chat Completions 端点，`thinkingTokenBudgetField` 选择推理预算参数，`vllmPriority` 在服务端启用优先级调度时设置整数调度优先级。模板参数接受 `$var: thinking.budget`。`openai-responses` 网关可设置 `supportsMaxOutputTokens: false` 来省略 `max_output_tokens`；Azure 与 Codex 传输会忽略这个共享兼容字段。这些控制均需显式启用；目录拥有的 Anthropic effort 和回退能力不是可配置开关。`userAgent` 是 attribution header 优先级的专用例外：设置后，它会在过滤 profile `headers` 后替换 Harness `User-Agent`，其他保留的 attribution 名称仍归 Harness 所有。
 
 ### 运行时更改配置
 
