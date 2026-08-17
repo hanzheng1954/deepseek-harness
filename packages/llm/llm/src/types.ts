@@ -148,6 +148,23 @@ export interface LlmProviderInfo {
   name: string
 }
 
+/**
+ * One account-balance snapshot reported by a provider adapter. Providers
+ * without a balance endpoint answer `undefined` from
+ * {@link LlmAdapter.queryBalance} — absence is a capability fact, never an
+ * error, so account-less adapters keep working unchanged.
+ */
+export interface ProviderBalance {
+  /** ISO 4217 currency code reported by the provider (e.g. `CNY`). */
+  currency: string
+  /** Total spendable balance (granted + topped-up). */
+  total: number
+  /** Recharge-sourced balance. */
+  toppedUp: number
+  /** Granted/promotional balance. */
+  granted: number
+}
+
 /** Merge-extensible provider model modality vocabulary. */
 export interface ModelModalityMap {
   text: 'text'

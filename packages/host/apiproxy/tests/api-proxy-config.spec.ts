@@ -14,7 +14,7 @@ import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import UserQuestionService from '@deepseek-ai/dsh-user-questions'
 import LlmRuntime, { LlmAdapter } from '@deepseek-ai/dsh-llm'
-import type { GenerateOptions, LlmModelInfo, LlmProviderInfo, StreamChunk } from '@deepseek-ai/dsh-llm'
+import type { GenerateOptions, LlmModelInfo, LlmProviderInfo, ProviderBalance, StreamChunk } from '@deepseek-ai/dsh-llm'
 import { SettingsProvider, settingsNamespace } from '@deepseek-ai/dsh-settings'
 import type { SettingsNamespace } from '@deepseek-ai/dsh-settings'
 import { CredentialProvider } from '@deepseek-ai/dsh-credentials'
@@ -152,6 +152,22 @@ class CatalogAdapter extends LlmAdapter {
 class BrokenCatalogAdapter extends CatalogAdapter {
   override listModels(): Promise<readonly LlmModelInfo[]> {
     return Promise.reject(new Error('catalog backend down'))
+  }
+}
+
+/** Adapter answering a scripted balance (or a scripted failure) for llm.balance tests. */
+class BalanceAdapter extends CatalogAdapter {
+  constructor(
+    private readonly balance: ProviderBalance | undefined,
+    private readonly failure?: Error,
+  ) {
+    super('DeepSeek', [])
+  }
+
+  override queryBalance(): Promise<ProviderBalance | undefined> {
+    return this.failure === undefined
+      ? Promise.resolve(this.balance)
+      : Promise.reject(this.failure)
   }
 }
 
@@ -775,5 +791,52 @@ describe('llm.discoverModels', () => {
 
     expect(error.code).toBe('model-discovery-failed')
     expect(error.message).toContain('no model discovery is registered')
+  })
+})
+
+describe('llm.balance', () => {
+  it('serves the provider balance, defaulting to the DeepSeek official route', async () => {
+    const ctx = await harness()
+    ctx.llm.registerAdapter(['deepseek-official'], new BalanceAdapter({
+      currency: 'CNY', total: 905.48, toppedUp: 905.48, granted: 0,
+    }))
+    const api = createApiProxy(ctx, DEFAULTS)
+
+    const value = expectOk(await api.llm.balance(request({})))
+    expect(value.balance).toEqual({ currency: 'CNY', total: 905.48, toppedUp: 905.48, granted: 0 })
+  })
+
+  it('honors an explicit provider route', async () => {
+    const ctx = await harness()
+    ctx.llm.registerAdapter(['deepseek-official'], new BalanceAdapter({
+      currency: 'USD', total: 1.5, toppedUp: 1.5, granted: 0,
+    }))
+    const api = createApiProxy(ctx, DEFAULTS)
+
+    const value = expectOk(await api.llm.balance(request({ provider: 'deepseek-official' })))
+    expect(value.balance?.currency).toBe('USD')
+  })
+
+  it('serves an absent balance for a capability-less or unavailable account', async () => {
+    const ctx = await harness()
+    ctx.llm.registerAdapter(['deepseek-official'], new BalanceAdapter(undefined))
+    const api = createApiProxy(ctx, DEFAULTS)
+
+    expect(expectOk(await api.llm.balance(request({}))).balance).toBeUndefined()
+    // No registered adapter at all: the same absent answer, never an error.
+    const bare = await harness()
+    const bareApi = createApiProxy(bare, DEFAULTS)
+    expect(expectOk(await bareApi.llm.balance(request({}))).balance).toBeUndefined()
+  })
+
+  it('maps an adapter failure to balance-query-failed with the provider named', async () => {
+    const ctx = await harness()
+    ctx.llm.registerAdapter(['deepseek-official'], new BalanceAdapter(undefined, new Error('401 invalid key')))
+    const api = createApiProxy(ctx, DEFAULTS)
+
+    const error = expectErr(await api.llm.balance(request({})))
+    expect(error.code).toBe('balance-query-failed')
+    expect(error.message).toContain('401 invalid key')
+    expect(error.details).toEqual({ provider: 'deepseek-official' })
   })
 })

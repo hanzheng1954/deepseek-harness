@@ -47,6 +47,8 @@ harness LLM（大语言模型）seam 的 DeepSeek chat-completions 适配器：�
 
 `streamIdleTimeoutMs` 会限制每次未完成提供方读取，包括初始 `fetch`，但不计入消费方在分片间花费的时间。DeepSeek SSE 注释会作为传输活动使尚未完成的读取重新布防，但绝不会成为 `StreamChunk` 值或会话日志事件。同一个稳定的 abort 信号会在整个调用期间传递给请求与 body reader；过期会停止传输并抛出 `LlmError('TIMEOUT')`，较早的调用方 abort 则抛出 `LlmError('ABORTED')`。适配器每次 `stream()` 调用恰好发起一次提供方请求；它把已配置策略注册为提供方元数据，再由 `dsh-llm-retry` 在持久化的 agent（智能体）步骤边界单独执行该策略。
 
+`queryBalance('deepseek-official')` 是适配器在通用接缝上的账户余额能力：它通过 `stream` 同样的逐操作连接/凭据解析读取 `GET {baseURL}/user/balance`——端点与 bearer 密钥来自同一份快照，密钥绝不会被发送到另一配置代的端点——并携带相同的归属头。状态码 200 但 `is_available` 为 false、或账户没有任何余额行时，回答 `undefined`（无账户的情况，绝非错误）；非 2xx 响应抛出与模型调用相同的 `LlmError` 码分类（401/403 为 `AUTH`，5xx 为 `SERVER`，…），HTTP 状态落在 `failure` 上，响应前的传输失败抛出 `TRANSPORT`。提供方不暴露此类端点的适配器只需省略该方法。
+
 ## 动态配置（settings + credentials）
 
 连接事实不在加载时冻结。`resolveAdapterOptions` 是从原始配置到已校验事实的唯一显式 resolve 步骤，适配器经由一个 thunk **每操作重读一次**：base URL、catalog、请求默认值与 idle 预算都在下一次请求生效，进行中的流则保持其起始事实。两个可选 seam 供给该 thunk：

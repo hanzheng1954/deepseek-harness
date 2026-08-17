@@ -18,6 +18,7 @@ import type {
   LlmResolvedModelInfo,
   LlmProviderInfo,
   ModelModality,
+  ProviderBalance,
   StreamChunk,
 } from './types.ts'
 import { freezeMessage, type Message } from './message.ts'
@@ -230,6 +231,18 @@ export abstract class LlmAdapter {
    * @returns the chunk stream, obeying the adapter contract documented on `StreamChunk`.
    */
   abstract stream(options: GenerateOptions): AsyncIterable<StreamChunk>
+
+  /**
+   * Query the provider account's billing balance, when the provider exposes
+   * one. Optional on purpose: absence means the provider has no balance
+   * endpoint, which consumers surface as "unsupported", not as an error.
+   * @param provider - one provider route owned by this adapter.
+   * @param signal - cancellation for the query; asynchronous implementations
+   *   must settle promptly after it aborts.
+   * @returns the balance snapshot, or `undefined` when the provider does not
+   *   expose one (or reported the balance unavailable).
+   */
+  queryBalance?(provider: string, signal?: AbortSignal): Promise<ProviderBalance | undefined>
 }
 
 /**
@@ -418,6 +431,19 @@ export class LlmRuntime extends Service {
    */
   listProviders(): LlmProviderInfo[] {
     return [...this.adapters.values()].map(({ provider }) => ({ ...provider }))
+  }
+
+  /**
+   * Query one provider account's billing balance through its owning adapter.
+   * An adapter without the capability, or a provider whose endpoint reports
+   * no balance, answers `undefined` — the account-less case, not a failure.
+   * @param provider - a provider route with a registered adapter.
+   * @param signal - cancellation forwarded to the adapter query.
+   * @returns the balance snapshot, or `undefined` when unavailable.
+   */
+  async queryBalance(provider: string, signal?: AbortSignal): Promise<ProviderBalance | undefined> {
+    const adapter = this.adapters.get(provider)?.adapter
+    return await adapter?.queryBalance?.(provider, signal)
   }
 
   /**

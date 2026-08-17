@@ -598,6 +598,57 @@ describe('DeepSeekAdapter against a mock server', () => {
       fetchSpy.mockRestore()
     }
   })
+
+  it('reads the account balance from /user/balance', async () => {
+    const server = await mockServer([{
+      kind: 'json',
+      body: JSON.stringify({
+        is_available: true,
+        balance_infos: [{
+          currency: 'CNY',
+          total_balance: '913.93',
+          granted_balance: '0.00',
+          topped_up_balance: '913.93',
+        }],
+      }),
+    }])
+    const ctx = await harness(server.url)
+
+    await expect(ctx.llm.queryBalance('deepseek-official')).resolves.toEqual({
+      currency: 'CNY',
+      total: 913.93,
+      toppedUp: 913.93,
+      granted: 0,
+    })
+    // The same auth/attribution discipline as model calls.
+    expect(server.headers[0]?.['authorization']).toBe('Bearer test-key')
+    expect(server.headers[0]?.['user-agent']).toBe(userAgent())
+    expect(server.requests[0]).toBe('')
+  })
+
+  it('answers undefined when the account reports the balance unavailable', async () => {
+    const server = await mockServer([{
+      kind: 'json',
+      body: JSON.stringify({ is_available: false, balance_infos: [] }),
+    }])
+    const ctx = await harness(server.url)
+
+    await expect(ctx.llm.queryBalance('deepseek-official')).resolves.toBeUndefined()
+  })
+
+  it('surfaces an auth failure as an AUTH LlmError', async () => {
+    const server = await mockServer([{
+      kind: 'http-error',
+      status: 401,
+      body: JSON.stringify({ error: { message: 'invalid key' } }),
+    }])
+    const ctx = await harness(server.url)
+
+    await expect(ctx.llm.queryBalance('deepseek-official')).rejects.toMatchObject({
+      name: 'LlmError',
+      failure: { code: 'AUTH', status: 401 },
+    })
+  })
 })
 
 describe('plugin registration and config', () => {

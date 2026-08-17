@@ -1,18 +1,20 @@
 /**
- * Model selection plugin, browser half — TWO entries over ONE per-session
- * directory owned by ModelDirectoryResolver (`ctx.modelDirectories`). The /model popupSelect
- * contribution and the composer's named `conversation.input.model` seat both
- * load the session's provider-grouped advisory directory (`session.models`)
- * and submit through `session.selectModel` via the same directory instance,
- * so the host-reported current selection is the single fact both surfaces echo
- * — a switch made in either entry is what the other shows next. Failures
- * ride each entry's own retry surface (popup shell error/retry; seat menu
- * inline error) without forking the state. Addressed subagent sessions expose
- * neither entry because those Agent-bound RPCs would activate persisted
- * history outside the direct-parent continuation path.
+ * Model selection plugin, browser half — TWO model entries over ONE per-session
+ * directory owned by ModelDirectoryResolver (`ctx.modelDirectories`), plus an
+ * ambient DeepSeek account-balance readout in the composer dock. The /model
+ * popupSelect contribution and the composer's named `conversation.input.model`
+ * seat both load the session's provider-grouped advisory directory
+ * (`session.models`) and submit through `session.selectModel` via the same
+ * directory instance, so the host-reported current selection is the single
+ * fact both surfaces echo — a switch made in either entry is what the other
+ * shows next. Failures ride each entry's own retry surface (popup shell
+ * error/retry; seat menu inline error) without forking the state. Addressed
+ * subagent sessions expose neither entry because those Agent-bound RPCs would
+ * activate persisted history outside the direct-parent continuation path.
  */
 // Type-only: the carrier types, the forwarded Host-event face and the ctx.remote merge.
 import type { ModelSelection, SessionModels } from '@deepseek-ai/dsh-api-remotes/client'
+import type { ConnectionHandle, ProviderBalanceView } from '@deepseek-ai/dsh-client-connection/client'
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
 import type { CommandUiContract, SelectOption } from '@deepseek-ai/dsh-client-ui-commands/client'
 // Type-only: pulls the ui-conversation SlotMap merge (the input.model seat).
@@ -24,6 +26,7 @@ import type { ModelDirectoryState } from './directory.ts'
 import { ModelDirectoryResolver } from './service.ts'
 import type { ModelSelectInjected } from './slots.ts'
 import { ModelSelect } from './ModelSelect.tsx'
+import { BalanceChip } from './BalanceChip.tsx'
 import { en, zh, type ModelKey } from './locales.ts'
 
 export { ModelDirectory } from './directory.ts'
@@ -172,5 +175,26 @@ export function apply(ctx: ClientContext): void {
         }
       },
     }, ModelSelect))
+  })
+
+  // Entry 3: ambient DeepSeek account-balance readout in the composer dock.
+  // Host-scoped — the scoped inject captures the connection api so the
+  // component stays framework-free, and polling lives in the component
+  // (mount, once a minute, and on window focus).
+  ctx.inject(['slots', 'connection'], (scope: ClientContext) => {
+    const connection = scope.get('connection') as ConnectionHandle
+    scope.slots.inject('conversation.composer.dock', () => scope.slots.register({
+      name: 'conversation.composer.dock',
+      id: 'deepseek-balance',
+      order: 1,
+      locale: NS,
+      inject: () => ({
+        loadBalance: async (signal: AbortSignal): Promise<ProviderBalanceView | undefined> => {
+          const response = await connection.api.llm.balance({}, signal)
+          if (!response.result.ok) throw new Error(response.result.error.message)
+          return response.result.value.balance
+        },
+      }),
+    }, BalanceChip))
   })
 }

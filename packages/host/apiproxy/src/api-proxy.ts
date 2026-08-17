@@ -3424,6 +3424,29 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
           })
         }
       },
+
+      async balance(request, signal) {
+        const provider = request.payload.provider ?? 'deepseek-official'
+        try {
+          // A provider with no registered adapter (or whose adapter lacks the
+          // capability) answers undefined — the account-less case, served as
+          // an absent balance rather than an error.
+          const balance = await ctx.llm.queryBalance(provider, signal)
+          return ok(request, balance === undefined ? {} : { balance })
+        } catch (error: unknown) {
+          // Auth, transport, and provider-side failures all leave the balance
+          // unreadable; the message carries the adapter's diagnosis while the
+          // code stays one stable surface the client can retry against.
+          if (signal?.aborted) {
+            return err(request, { code: 'cancelled', message: 'balance query was cancelled', details: {} })
+          }
+          return err(request, {
+            code: 'balance-query-failed',
+            message: error instanceof Error ? error.message : String(error),
+            details: { provider },
+          })
+        }
+      },
     },
 
     events: {

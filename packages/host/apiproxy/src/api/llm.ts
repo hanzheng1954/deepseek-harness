@@ -31,6 +31,18 @@ export interface ConfigurableProviderView {
   declared?: boolean
 }
 
+/** Wire view of one provider account-balance snapshot. */
+export interface ProviderBalanceView {
+  /** ISO 4217 currency code reported by the provider (e.g. `CNY`). */
+  currency: string
+  /** Total spendable balance (granted + topped-up). */
+  total: number
+  /** Recharge-sourced balance. */
+  toppedUp: number
+  /** Granted/promotional balance. */
+  granted: number
+}
+
 /** Llm-domain unary methods (the map keys llm.* of RpcMethodMap). */
 export interface LlmApi {
   /**
@@ -47,6 +59,16 @@ export interface LlmApi {
    * failures ride `failures` without failing the sound groups.
    */
   models(request: RpcRequest<{}>): Promise<RpcResponse<{ groups: ModelProviderGroup[]; failures: ModelCatalogFailure[] }>>
+
+  /**
+   * Query one provider account's billing balance through its owning adapter.
+   * Providers without a balance endpoint answer an absent `balance`; the
+   * request's provider defaults to the DeepSeek official route.
+   */
+  balance(
+    request: RpcRequest<{ provider?: string }>,
+    signal?: AbortSignal,
+  ): Promise<RpcResponse<{ balance?: ProviderBalanceView }>>
 
   /**
    * Interrogate a provider endpoint the configuration surface is still

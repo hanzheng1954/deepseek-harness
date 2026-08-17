@@ -5,6 +5,7 @@ import type { IncomingMessage, Server, ServerResponse } from 'node:http'
 export type Behavior =
   | { kind: 'sse'; events: string[]; delayMs?: number }
   | { kind: 'http-error'; status: number; body: string; contentType?: string; headers?: Record<string, string> }
+  | { kind: 'json'; body: string; status?: number; contentType?: string }
   | { kind: 'close-early'; events: string[] }
 
 export interface MockServer {
@@ -40,7 +41,8 @@ export async function mockServer(script: Behavior[]): Promise<MockServer> {
     let body = ''
     request.on('data', (chunk: Buffer) => { body += chunk.toString('utf8') })
     request.on('end', () => {
-      requests.push(JSON.parse(body))
+      // Chat requests carry JSON bodies; account queries (balance) are bodyless GETs.
+      try { requests.push(JSON.parse(body)) } catch { requests.push(body) }
       headers.push(request.headers)
       const behavior = script.shift()
       if (!behavior) {
@@ -51,6 +53,13 @@ export async function mockServer(script: Behavior[]): Promise<MockServer> {
         response.writeHead(behavior.status, {
           'content-type': behavior.contentType ?? 'application/json',
           ...behavior.headers,
+        })
+        response.end(behavior.body)
+        return
+      }
+      if (behavior.kind === 'json') {
+        response.writeHead(behavior.status ?? 200, {
+          'content-type': behavior.contentType ?? 'application/json',
         })
         response.end(behavior.body)
         return

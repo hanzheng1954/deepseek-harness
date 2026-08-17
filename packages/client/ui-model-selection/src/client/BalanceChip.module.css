@@ -1,0 +1,17 @@
+/* DeepSeek balance chip: one tertiary line segment in the composer dock's
+   stats band. Same 12/20 tertiary text treatment as the shipped stats line
+   so the readouts read as one strip; the error state stays ambient too —
+   the hover detail carries the diagnosis. */
+
+.chip {
+  font-size: 12px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chip[data-state='error'] {
+  color: var(--dsw-alias-label-dimmed);
+}

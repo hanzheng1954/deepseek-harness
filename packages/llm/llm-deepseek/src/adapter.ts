@@ -14,6 +14,7 @@ import type {
   LlmModelInfo,
   LlmProviderInfo,
   LlmResolvedModelInfo,
+  ProviderBalance,
   ResolvedRetryPolicy,
   StreamChunk,
 } from '@deepseek-ai/dsh-llm'
@@ -148,6 +149,20 @@ export function httpErrorCode(status: number, error?: WireError['error']): strin
   return `HTTP_${status}`
 }
 
+/** One row of the DeepSeek `GET /user/balance` wire body. */
+interface BalanceWireRow {
+  currency: string
+  total_balance: string
+  granted_balance: string
+  topped_up_balance: string
+}
+
+/** Wire shape of the DeepSeek `GET /user/balance` response. */
+interface BalanceWireBody {
+  is_available: boolean
+  balance_infos?: BalanceWireRow[]
+}
+
 /**
  * The first real `LlmAdapter`. One instance serves every model name it was
  * registered under (the harness model name IS the wire model name).
@@ -209,6 +224,60 @@ export class DeepSeekAdapter extends LlmAdapter {
           },
         },
     })
+  }
+
+  /**
+   * Query the DeepSeek account balance endpoint (`GET /user/balance`) for
+   * this adapter's provider. Connection facts and the credential resolve per
+   * call — the same pairing discipline as `stream`, so the key can never be
+   * sent to an endpoint from another configuration generation. Providers
+   * whose endpoint reports the balance unavailable answer `undefined`.
+   */
+  override async queryBalance(_provider: string, signal?: AbortSignal): Promise<ProviderBalance | undefined> {
+    const connection = this.config.options()
+    const apiKey = await this.config.resolveApiKey(connection)
+    const headers = {
+      'authorization': `Bearer ${apiKey}`,
+      'accept': 'application/json',
+      ...attributionHeaders(),
+    }
+    let response: Response
+    try {
+      response = await fetch(`${connection.baseURL}/user/balance`, {
+        method: 'GET',
+        headers,
+        ...signal === undefined ? {} : { signal },
+      })
+    } catch (error: unknown) {
+      if (signal?.aborted) throw error
+      throw new LlmError(
+        `DeepSeek balance query to ${connection.baseURL} failed`,
+        'TRANSPORT',
+        { cause: error },
+      )
+    }
+    if (!response.ok) {
+      throw new LlmError(
+        `DeepSeek balance query failed (HTTP ${response.status})`,
+        httpErrorCode(response.status, undefined),
+        { status: response.status },
+      )
+    }
+    let body: BalanceWireBody
+    try {
+      body = await response.json() as BalanceWireBody
+    } catch {
+      throw new LlmError('DeepSeek balance query returned no readable body', 'EMPTY_RESPONSE')
+    }
+    if (body.is_available !== true) return undefined
+    const row = body.balance_infos?.[0]
+    if (row === undefined) return undefined
+    return {
+      currency: row.currency,
+      total: Number(row.total_balance),
+      toppedUp: Number(row.topped_up_balance),
+      granted: Number(row.granted_balance),
+    }
   }
 
   async * stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
