@@ -173,13 +173,23 @@ function reasoningInfo(
   }
 }
 
-/** Merge deployment headers while removing case-insensitive attribution collisions. */
-function requestHeaders(headers: Readonly<Record<string, string>> | undefined): Record<string, string> {
+/**
+ * Merge deployment headers while removing case-insensitive attribution collisions.
+ * A configured `userAgent` is the one deliberate exception: it replaces the
+ * attribution `user-agent` rather than being filtered with the other reserved
+ * names, because pinning an official-client identity is exactly what a gateway
+ * behind a private route can require and no other field can express.
+ */
+function requestHeaders(
+  headers: Readonly<Record<string, string>> | undefined,
+  userAgent: string | undefined,
+): Record<string, string> {
   const attribution = attributionHeaders()
   const reserved = new Set(Object.keys(attribution).map(name => name.toLowerCase()))
   return {
     ...Object.fromEntries(Object.entries(headers ?? {}).filter(([name]) => !reserved.has(name.toLowerCase()))),
     ...attribution,
+    ...userAgent === undefined ? {} : { 'user-agent': userAgent },
   }
 }
 
@@ -325,8 +335,9 @@ export class PiAiAdapter extends LlmAdapter {
         ...options.sessionId === undefined ? {} : { sessionId: String(options.sessionId) },
         signal: watchdog.signal,
         // Profile headers are deployment-owned; attribution names are
-        // Harness-owned and therefore win collisions.
-        headers: requestHeaders(profile.headers),
+        // Harness-owned and therefore win collisions, except a configured
+        // `userAgent`, which deliberately replaces the attribution UA.
+        headers: requestHeaders(profile.headers, profile.userAgent),
       })
       const iterator = toStreamChunks(events, model.contextWindow)[Symbol.asyncIterator]()
       let exhausted = false

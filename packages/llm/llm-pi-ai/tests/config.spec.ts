@@ -64,3 +64,18 @@ describe('modality schema boundary', () => {
     expect(absent.providers['acme-gateway']?.defaultInput).toEqual(['text'])
   })
 })
+
+describe('userAgent schema boundary', () => {
+  it('refuses an empty userAgent at the write that produced it', () => {
+    expect(routeWith({ userAgent: '' })).not.toThrow()
+    expect(() => { assertServiceable(routeWith({ userAgent: '' })() as Config) })
+      .toThrow(/has an empty userAgent/)
+  })
+
+  it('keeps a configured userAgent on the resolved route', () => {
+    const config = routeWith({ userAgent: 'codex_cli_rs/0.146.2' })() as {
+      providers: Record<string, { userAgent?: unknown }>
+    }
+    expect(config.providers['acme-gateway']?.userAgent).toBe('codex_cli_rs/0.146.2')
+  })
+})

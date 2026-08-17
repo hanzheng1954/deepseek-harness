@@ -83,6 +83,19 @@ describe('PiAiAdapter provider routing', () => {
     expect(server.headers[0]?.['user-agent']).toBe(userAgent())
   })
 
+  it('replaces the Harness attribution user-agent with a configured one', async () => {
+    const server = await mockServer([{ events: textEvents }])
+    const ctx = await harness(server.url, {
+      userAgent: 'codex_cli_rs/0.146.2',
+      // A raw header spelling the reserved name is still filtered; the
+      // dedicated field is the only override that wins.
+      headers: { 'x-company': 'private', 'User-Agent': 'wrong' },
+    })
+    await assemble(ctx, { model: 'deepseek-v4-flash', messages: [] })
+    expect(server.headers[0]?.['user-agent']).toBe('codex_cli_rs/0.146.2')
+    expect(server.headers[0]?.['x-company']).toBe('private')
+  })
+
   it('forwards common stream options and profile reasoning', async () => {
     const server = await mockServer([{ events: textEvents }])
     const ctx = await harness(server.url, {

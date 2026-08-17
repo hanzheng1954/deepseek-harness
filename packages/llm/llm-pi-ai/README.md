@@ -51,6 +51,9 @@ Configure credentials, the model catalog, and deployment-specific transport sett
         apiKeyEnv: ACME_GATEWAY_API_KEY
         api: openai-completions
         baseURL: https://gateway.acme.example/v1
+        # UA pin for a gateway that only serves official clients; replaces
+        # the Harness attribution UA on every request to this route.
+        userAgent: codex_cli_rs/0.146.2
         # Reasoning dialect for an endpoint whose URL pi-ai cannot recognize.
         compat:
           thinkingFormat: deepseek
