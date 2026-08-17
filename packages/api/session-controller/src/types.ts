@@ -149,6 +149,28 @@ export interface ModelCatalog {
   readonly failures: readonly ModelCatalogFailure[]
 }
 
+/** Browser-safe account-balance snapshot from one provider adapter. */
+export interface ProviderBalanceView {
+  /** ISO 4217 currency code reported by the provider. */
+  readonly currency: string
+  /** Total spendable balance. */
+  readonly total: number
+  /** Recharge-sourced balance. */
+  readonly toppedUp: number
+  /** Granted or promotional balance. */
+  readonly granted: number
+}
+
+/** Host-generation provider-balance request. */
+export interface ProviderBalanceRequest {
+  readonly provider: string
+}
+
+/** Provider-balance result; omission means that the adapter exposes no balance. */
+export interface ProviderBalanceValue {
+  readonly balance?: ProviderBalanceView
+}
+
 /** One client-requested mutation of a still-pending queue item. */
 export type QueueAction =
   | {

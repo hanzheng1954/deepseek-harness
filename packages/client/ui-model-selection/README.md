@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-The Web GUI lets users switch the model and reasoning effort for an existing session through either the `/model` popup or the composer's model control. Both surfaces present the same provider-grouped choices, and the selected model determines the available effort names and default. A complete selection applies to the next request; a running step keeps the model and effort it started with. If no adapter can serve the session's route, the composer remains disabled until routing becomes available.
+The Web GUI lets users switch the model and reasoning effort for an existing session through either the `/model` popup or the composer's model control. Both surfaces present the same provider-grouped choices, and the selected model determines the available effort names and default. A complete selection applies to the next request; a running step keeps the model and effort it started with. If no adapter can serve the session's route, the composer remains disabled until routing becomes available. The composer dock also shows the official DeepSeek account balance when that adapter exposes it.
 
 ## Table of Contents
 
@@ -39,6 +39,10 @@ When the Host reports that no adapter serves the session's route, this plugin ra
 
 When another writer owns the Session, model-selection failures tell the user to quit other running DSH instances and retry.
 
+### Account balance
+
+The composer dock queries `deepseek-official` on mount, once per minute, and when the window regains focus. A successful reading shows the total and exposes topped-up and granted amounts on hover. An unsupported balance endpoint renders nothing; a failed refresh keeps an error label with the failure detail.
+
 -----
 
 <a id="understand-the-implementation"></a>
@@ -47,7 +51,7 @@ When another writer owns the Session, model-selection failures tell the user to 
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-Two entries over ONE per-session directory owned by `ModelDirectoryResolver` (`ctx.modelDirectories`): the `/model` popupSelect contribution (registered through `ctx.commandUi`) and the composer's named `conversation.input.model` seat both load the session's advisory directory through `session.models` and submit through `session.selectModel` via the same `ModelDirectory` instance, so a switch made in either entry is what the other shows next. Directory loads and selections share a generation counter so an older response never overwrites a newer one; a connection reset drops every resident projection and repulls the Host-restored selection before display. Directories are per-session, resolved lazily, and disposed with the session scope; addressed subagent sessions expose neither entry. Every resident directory refetches directly on forwarded `llm/adapters-updated` and `settings/document-updated` owner events.
+Two entries share one per-session directory owned by `ModelDirectoryResolver` (`ctx.modelDirectories`): the `/model` popupSelect contribution (registered through `ctx.commandUi`) and the composer's named `conversation.input.model` seat both load the advisory directory through `session.modelCatalog` and submit through `session.selectModel` via the same `ModelDirectory` instance, so a switch made in either entry is what the other shows next. Directory loads and selections share a generation counter so an older response never overwrites a newer one; a connection reset drops every resident projection and repulls the Host-restored selection before display. Directories are per-session, resolved lazily, and disposed with the session scope; addressed subagent sessions expose neither entry. Every resident directory refetches directly on forwarded `llm/adapters-updated` and `settings/document-updated` owner events. A separate `conversation.composer.dock` entry calls `session.providerBalance` for `deepseek-official`; it owns no per-session directory state.
 
 </details>
 
@@ -84,6 +88,7 @@ These limits define the current model surface. They are current package constrai
 - **No create-time or addressed-subagent selection** — both entries require an existing ordinary session's Agent; there is no draft-phase model choice to fold into session creation, and subagent continuation deliberately exposes no independent model-selection contract.
 - **Directory names are presentation-only** — selection and persistence use provider/model/effort ids; a provider whose catalog or exact-model metadata lookup fails lists as an unselectable failure row until reload.
 - **No arbitrary effort input** — the composer offers only the exact model's adapter-advertised levels; an adapter without reasoning metadata leaves the Effort row absent.
+- **The balance chip targets the official route** — it queries `deepseek-official`; selecting another provider does not move account reporting to that provider.
 
 <a id="dev-note"></a>
 ### Dev Note
@@ -95,4 +100,4 @@ None.
 
 </details>
 
-**Runtime invariant:** No companion is published. The plugin registers a single command contribution, and the HMR-safety spec proves that the registration is disposed correctly. The plugin emits no Cordis events and owns no cross-plugin mutable state.
+**Runtime invariant:** No companion is published. The plugin registers one command contribution and two slot entries; HMR-safety specs prove their disposal. The plugin emits no Cordis events and owns no cross-plugin mutable state.

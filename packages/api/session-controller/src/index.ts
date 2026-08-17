@@ -26,6 +26,8 @@ import { SessionSkillCatalog } from './skill-catalog.ts'
 import { SessionMediaReferences } from './media-references.ts'
 import type {
   ModelCatalog,
+  ProviderBalanceRequest,
+  ProviderBalanceValue,
   SessionAttachmentRequest,
   SessionAttachmentValue,
   SessionCancelRequest,
@@ -263,6 +265,18 @@ export class SessionController extends TypertRemoteService {
   @Remote('modelCatalog')
   modelCatalog(): Promise<ModelCatalog> {
     return buildModelCatalog(this.ctx)
+  }
+
+  /**
+   * Query one provider account's balance without activating a Session.
+   * @param request - provider route whose owning adapter may expose a balance.
+   * @param signal - caller cancellation forwarded to the adapter.
+   * @returns the balance when supported and available.
+   */
+  @Remote('providerBalance')
+  async providerBalance(request: ProviderBalanceRequest, signal: AbortSignal): Promise<ProviderBalanceValue> {
+    const balance = await this.ctx.llm.queryBalance(request.provider, signal)
+    return balance === undefined ? {} : { balance }
   }
 
   /**

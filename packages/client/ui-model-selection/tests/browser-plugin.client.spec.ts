@@ -2,10 +2,10 @@
  * ui-model-selection browser half on a real cordis Context with fake command/slots/
  * connection faces and real session scopes: the plugin mounts ModelDirectoryResolver
  * as `models`, the /model contribution and the conversation.input.model
- * seat both register, and BOTH entries resolve the SAME per-session
+ * seat and balance dock register, and both selectors resolve the same per-session
  * directory through the service — a selection submitted through the seat's
  * inject face is the current the popup's next options pass marks active
- * (and the reverse), the one-shared-state contract of the dual entry.
+ * (and the reverse), the one-shared-state contract of the selector pair.
  * Scope disposal drops the directory (HMR safety).
  */
 import { Context } from '@deepseek-ai/cordis'
@@ -88,6 +88,7 @@ async function bench(locale: 'zh' | 'en' = 'zh') {
         },
       })
     },
+    providerBalance: () => Promise.resolve({ ok: true as const, value: {} }),
     selectModel: (payload: { sessionId: SessionId; provider: string; model: string; reasoningEffort?: string }) => {
       calls.select += 1
       if (selectionFailure !== undefined) return Promise.resolve({ ok: false as const, error: selectionFailure })
@@ -179,6 +180,7 @@ async function bench(locale: 'zh' | 'en' = 'zh') {
       return ui
     },
     seat: () => seats.get('conversation.input.model')!,
+    balanceSeat: () => seats.get('conversation.composer.dock')!,
     hostCurrent: () => selected,
     rejectSelection: () => {
       selectionFailure = new RemoteError('session/writer-held', 'writer held', { sessionId: sid('owned') })
@@ -211,8 +213,10 @@ describe('ui-model-selection dual entry', () => {
     expect(b.contribution().name).toBe('model')
     expect(b.contribution().ui.kind).toBe('popupSelect')
     expect(b.seat().inject).toBeTypeOf('function')
+    expect(b.balanceSeat().inject).toBeTypeOf('function')
     // Copy rides the standard locale seat.
     expect(b.seat().locale).toBe('model')
+    expect(b.balanceSeat().locale).toBe('model')
   })
 
   it('localizes built-in descriptions and preserves external provider descriptions', async () => {

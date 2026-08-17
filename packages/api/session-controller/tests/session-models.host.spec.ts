@@ -13,8 +13,8 @@ import AttachmentStore from '@deepseek-ai/dsh-attachment'
 import LlmRuntime, { LlmAdapter, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import type {
   GenerateOptions, LlmCallConfig, LlmCallConfigAdapterDefaults, LlmModelInfo,
-  LlmModelReasoningInfo, LlmProviderInfo, LlmResolvedModelInfo, StreamChunk,
-  UserMessage,
+  LlmModelReasoningInfo, LlmProviderInfo, LlmResolvedModelInfo, ProviderBalance,
+  StreamChunk, UserMessage,
 } from '@deepseek-ai/dsh-llm'
 import SessionStore from '@deepseek-ai/dsh-session'
 import type { SessionId } from '@deepseek-ai/dsh-session'
@@ -71,6 +71,16 @@ class CatalogAdapter extends LlmAdapter {
 
   override async *stream(_options: GenerateOptions): AsyncIterable<StreamChunk> {
     // Catalog tests never enter provider streaming.
+  }
+}
+
+class BalanceAdapter extends CatalogAdapter {
+  constructor(private readonly balance: ProviderBalance) {
+    super('Balance Provider', [])
+  }
+
+  override queryBalance(_provider: string, _signal?: AbortSignal): Promise<ProviderBalance> {
+    return Promise.resolve(this.balance)
   }
 }
 
@@ -383,6 +393,20 @@ describe('Web session model selection', () => {
         message: 'adapter returned invalid or duplicate model metadata for provider "duplicate"',
       },
     ])
+    await ctx.fiber.dispose()
+  })
+
+  it('queries provider balances without activating a Session', async () => {
+    const { ctx } = await harness()
+    const balance = { currency: 'CNY', total: 12.5, toppedUp: 10, granted: 2.5 }
+    ctx.llm.registerAdapter(['balance-provider'], new BalanceAdapter(balance))
+    const remote = createSessionTestRemote(ctx, {
+      defaultModelSelection: () => ({ provider: 'deepseek-official', model: 'deepseek-chat' }),
+      cwd: '/tmp',
+    })
+
+    expect(expectValue(await remote.providerBalance({ provider: 'balance-provider' }))).toEqual({ balance })
+    expect(expectValue(await remote.providerBalance({ provider: 'deepseek-official' }))).toEqual({})
     await ctx.fiber.dispose()
   })
 

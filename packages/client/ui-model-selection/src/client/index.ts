@@ -1,5 +1,5 @@
 /**
- * Model selection plugin, browser half — TWO entries over ONE per-session
+ * Model selection plugin, browser half — model selectors plus one account-balance readout over ONE per-session
  * directory owned by ModelDirectoryResolver (`ctx.modelDirectories`). The /model popupSelect
  * contribution and the composer's named `conversation.input.model` seat share
  * one Host-generation `session/modelCatalog` catalog, combine it with the Session's
@@ -11,7 +11,7 @@
  * history outside the direct-parent continuation path.
  */
 // Type-only: the carrier types, the forwarded Host-event face and the ctx.remote merge.
-import type { ModelSelection } from '@deepseek-ai/dsh-api-session-controller/types'
+import type { ModelSelection, ProviderBalanceView } from '@deepseek-ai/dsh-api-session-controller/types'
 import type {} from '@deepseek-ai/dsh-api-session-controller/client'
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type { CommandUiContract, SelectOption } from '@deepseek-ai/dsh-client-ui-commands/client'
@@ -26,6 +26,7 @@ import { IconDataOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ModelDirectoryState } from './directory.ts'
 import { ModelDirectoryResolver } from './service.ts'
 import type { ModelSelectInjected } from './slots.ts'
+import { BalanceChip } from './BalanceChip.tsx'
 import { ModelSelect } from './ModelSelect.tsx'
 import { en, zh, type ModelKey } from './locales.ts'
 
@@ -197,4 +198,20 @@ export function apply(ctx: ClientContext): void {
       },
     }, ModelSelect))
   })
+
+  // Ambient official-account balance beside the composer stats. Unsupported
+  // deployments resolve no value and leave no placeholder after the first read.
+  ctx.slots.inject('conversation.composer.dock', () => ctx.slots.register({
+    name: 'conversation.composer.dock',
+    id: 'deepseek-balance',
+    order: 10,
+    locale: NS,
+    inject: () => ({
+      loadBalance: async (signal: AbortSignal): Promise<ProviderBalanceView | undefined> => {
+        const response = await ctx.remote.session.providerBalance({ provider: 'deepseek-official' }, signal)
+        if (!response.ok) throw new Error(`${response.error.code}: ${response.error.message}`)
+        return response.value.balance
+      },
+    }),
+  }, BalanceChip))
 }
