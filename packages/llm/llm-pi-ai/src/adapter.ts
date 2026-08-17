@@ -175,12 +175,26 @@ function reasoningInfo(
 
 /**
  * Official Codex client identity pinned automatically on `openai-responses`
- * requests whose route names no explicit profile `userAgent` override.
+ * requests whose route names no explicit profile `userAgent` override and
+ * already claims the Codex client origin through its configured headers.
  * Gateways that only serve official Codex clients reject other identities,
- * so the Responses wire defaults to this UA; every other protocol keeps the
- * Harness attribution UA unless a profile overrides it.
+ * so a Codex-origin route gets this UA by default; every other route and
+ * protocol keeps the Harness attribution UA unless a profile overrides it.
  */
 export const CODEX_RESPONSES_USER_AGENT = 'codex_cli_rs/0.146.2'
+
+/**
+ * The configured-header signature of a route that presents as an official
+ * Codex client: exactly the `originator` the Codex CLI sends. Only such a
+ * route gets {@link CODEX_RESPONSES_USER_AGENT} automatically — scoping the
+ * pin to gateways that demand a Codex identity instead of rewriting the UA
+ * for every Responses-speaking relay.
+ * @param headers - the route's configured request headers.
+ * @returns whether the route claims the official Codex client origin.
+ */
+function claimsCodexOrigin(headers: Readonly<Record<string, string>> | undefined): boolean {
+  return headers?.['originator']?.toLowerCase() === 'codex_exec'
+}
 
 /**
  * Merge deployment headers while removing case-insensitive attribution collisions.
@@ -345,13 +359,18 @@ export class PiAiAdapter extends LlmAdapter {
         signal: watchdog.signal,
         // Profile headers are deployment-owned; attribution names are
         // Harness-owned and therefore win collisions, except a configured
-        // `userAgent`, which deliberately replaces the attribution UA. The
-        // Responses wire without one automatically pins the official Codex
-        // client UA — gateways behind that wire commonly refuse other
-        // identities — while every other protocol keeps Harness attribution.
+        // `userAgent`, which deliberately replaces the attribution UA. An
+        // openai-responses route without one and with a Codex client origin
+        // pins the official Codex UA automatically — gateways behind that
+        // wire commonly refuse other identities — while every other route
+        // keeps Harness attribution.
         headers: requestHeaders(
           profile.headers,
-          profile.userAgent ?? (model.api === 'openai-responses' ? CODEX_RESPONSES_USER_AGENT : undefined),
+          profile.userAgent ?? (
+            model.api === 'openai-responses' && claimsCodexOrigin(profile.headers)
+              ? CODEX_RESPONSES_USER_AGENT
+              : undefined
+          ),
         ),
       })
       const iterator = toStreamChunks(events, model.contextWindow)[Symbol.asyncIterator]()

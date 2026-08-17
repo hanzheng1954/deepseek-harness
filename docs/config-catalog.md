@@ -974,8 +974,9 @@ export interface PiAiProviderProfile {
    * {@link headers} by design — the Harness attribution UA is merged last and
    * wins collisions — so a gateway that pins an official client identity
    * (e.g. `codex_cli_rs/0.146.2`) sets it here instead. Omission keeps the
-   * Harness attribution UA, except on `openai-responses` models, which
-   * automatically pin the official Codex client UA (see
+   * Harness attribution UA, except that an `openai-responses` route whose
+   * headers claim the Codex client origin (`originator: codex_exec`)
+   * automatically pins the official Codex client UA (see
    * `CODEX_RESPONSES_USER_AGENT`); an explicit value replaces that default
    * too.
    */
@@ -1090,7 +1091,7 @@ type WithheldThinkingFormat = 'chat-template' | 'qwen-chat-template'
 
 Depends on: `Api` (`@earendil-works/pi-ai`) · `CacheRetention` (`@earendil-works/pi-ai`) · `Model` (`@earendil-works/pi-ai`) · `ModelThinkingLevel` (`@earendil-works/pi-ai`) · `OpenAICompletionsCompat` (`@earendil-works/pi-ai`) · [`RetryPolicyConfig`](../packages/llm/llm/src/index.ts) · `ThinkingBudgets` (`@earendil-works/pi-ai`) · `Transport` (`@earendil-works/pi-ai`)
 
-Source: [`packages/llm/llm-pi-ai/src/config.ts:183`](../packages/llm/llm-pi-ai/src/config.ts)
+Source: [`packages/llm/llm-pi-ai/src/config.ts:184`](../packages/llm/llm-pi-ai/src/config.ts)
 
 <a id="deepseek-aidsh-llm-replay"></a>
 

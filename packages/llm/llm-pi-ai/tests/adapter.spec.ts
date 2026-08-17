@@ -97,9 +97,12 @@ describe('PiAiAdapter provider routing', () => {
     expect(server.headers[0]?.['x-company']).toBe('private')
   })
 
-  it('pins the official Codex user-agent automatically on openai-responses routes', async () => {
+  it('pins the official Codex user-agent on an openai-responses route claiming the Codex origin', async () => {
     const server = await mockServer([{ sse: responsesTextEvents }])
-    const ctx = await harness(server.url, { api: 'openai-responses' })
+    const ctx = await harness(server.url, {
+      api: 'openai-responses',
+      headers: { originator: 'codex_exec' },
+    })
     const result = await assemble(ctx, {
       model: 'deepseek-v4-flash',
       messages: [createUserMessage({
@@ -110,6 +113,19 @@ describe('PiAiAdapter provider routing', () => {
     expect(result.message.content).toEqual([{ type: 'text', text: 'hello' }])
     expect(server.paths).toEqual(['/responses'])
     expect(server.headers[0]?.['user-agent']).toBe(CODEX_RESPONSES_USER_AGENT)
+  })
+
+  it('keeps the Harness attribution user-agent on an openai-responses route without the Codex origin', async () => {
+    const server = await mockServer([{ sse: responsesTextEvents }])
+    const ctx = await harness(server.url, { api: 'openai-responses' })
+    await assemble(ctx, {
+      model: 'deepseek-v4-flash',
+      messages: [createUserMessage({
+        content: [{ type: 'text', text: 'hi' }],
+        source: { kind: 'plugin', plugin: 'test' },
+      })],
+    })
+    expect(server.headers[0]?.['user-agent']).toBe(userAgent())
   })
 
   it('forwards common stream options and profile reasoning', async () => {

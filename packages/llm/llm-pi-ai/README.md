@@ -51,8 +51,9 @@ Configure credentials, the model catalog, and deployment-specific transport sett
         apiKeyEnv: ACME_GATEWAY_API_KEY
         api: openai-completions
         baseURL: https://gateway.acme.example/v1
-        # UA pin for a gateway that only serves official clients; openai-responses
-        # models pin the official Codex UA automatically, this replaces it here.
+        # UA pin for a gateway that only serves official clients; an
+        # openai-responses route with a Codex client origin header already
+        # pins the official Codex UA automatically, this replaces it here.
         userAgent: codex_cli_rs/0.146.2
         # Reasoning dialect for an endpoint whose URL pi-ai cannot recognize.
         compat:
