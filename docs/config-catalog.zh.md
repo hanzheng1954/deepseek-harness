@@ -215,7 +215,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/api/session-controller/src/index.ts:71`](../packages/api/session-controller/src/index.ts)
+来源：[`packages/api/session-controller/src/index.ts:73`](../packages/api/session-controller/src/index.ts)
 
 <a id="deepseek-aidsh-api-settings-controller"></a>
 
@@ -1320,6 +1320,18 @@ export interface PiAiProviderProfile {
   defaultInput?: PiAiModality[]
   /** Provider request headers, validated against Fetch when the profile resolves; Harness attribution wins reserved names. */
   headers?: Record<string, string>
+  /**
+   * `User-Agent` override for every request on this route. Reserved from
+   * {@link headers} by design — the Harness attribution UA is merged last and
+   * wins collisions — so a gateway that pins an official client identity
+   * (e.g. `codex_cli_rs/0.146.2`) sets it here instead. Omission keeps the
+   * Harness attribution UA, except that an `openai-responses` route whose
+   * headers claim the Codex client origin (`originator: codex_exec`)
+   * automatically pins the official Codex client UA (see
+   * `CODEX_RESPONSES_USER_AGENT`); an explicit value replaces that default
+   * too.
+   */
+  userAgent?: string
   /** Provider-neutral pi-ai reasoning level. */
   reasoning?: ModelThinkingLevel
   /** Token budgets used by reasoning providers that support them. */
@@ -1514,7 +1526,7 @@ export type PiAiThinkingTokenBudgetField = NonNullable<OpenAICompletionsCompat['
 
 Depends on: `Api` (`@earendil-works/pi-ai`) · `CacheRetention` (`@earendil-works/pi-ai`) · `Model` (`@earendil-works/pi-ai`) · `ModelThinkingLevel` (`@earendil-works/pi-ai`) · `OpenAICompletionsCompat` (`@earendil-works/pi-ai`) · [`RetryPolicyConfig`](../packages/llm/llm/src/index.ts) · `ThinkingBudgets` (`@earendil-works/pi-ai`) · `Transport` (`@earendil-works/pi-ai`)
 
-来源：[`packages/llm/llm-pi-ai/src/config.ts:221`](../packages/llm/llm-pi-ai/src/config.ts)
+来源：[`packages/llm/llm-pi-ai/src/config.ts:233`](../packages/llm/llm-pi-ai/src/config.ts)
 
 <a id="deepseek-aidsh-llm-replay"></a>
 

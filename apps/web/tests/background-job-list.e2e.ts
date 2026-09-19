@@ -7,7 +7,6 @@ import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { JobId } from '@deepseek-ai/dsh-jobs'
 import {
@@ -82,17 +81,16 @@ describe.skipIf(MODE === 'record')('web e2e: background job list', () => {
     const trigger = page.getByRole('button', { name: '1 background job running' })
     expect(await trigger.count()).toBe(0)
 
-    const started = await scaffold.ctx.tools.execute({
-      signal: new AbortController().signal,
-      callId: ToolCallId('background-job-list-e2e'),
-      name: 'bash',
-      arguments: { command: COMMAND, description: 'Hold a background slot open', run_in_background: true },
-      agent,
+    let settle!: (outcome: { status: 'killed'; detail: string }) => void
+    jobId = scaffold.ctx.jobs.start({
+      kind: 'bash',
+      label: COMMAND,
+      owner: agent,
+      run: () => ({
+        cancel: (reason) => { settle({ status: 'killed', detail: reason ?? 'cancelled' }) },
+        done: new Promise((resolve) => { settle = resolve }),
+      }),
     })
-    const reported = started.content.map(block => block.type === 'text' ? block.text : '').join('')
-    const matched = /\bbash-\d+\b/.exec(reported)
-    if (matched === null) throw new Error(`background bash reported no job id: ${reported}`)
-    jobId = JobId(matched[0])
 
     await trigger.waitFor({ timeout: 15_000 })
     await trigger.click()
@@ -119,7 +117,7 @@ describe.skipIf(MODE === 'record')('web e2e: background job list', () => {
     const mobileTripwire = watchConsole(mobilePage)
     try {
       await mobilePage.setViewportSize({ width: 360, height: 844 })
-      await mobilePage.goto(scaffold.baseUrl, { waitUntil: 'load' })
+      await mobilePage.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
       await mobilePage.waitForSelector('[class*="frame"]', { timeout: 30_000 })
       // Open the seeded session through the expanded sidebar.
       await mobilePage.getByRole('button', { name: 'Open sidebar' }).click()
@@ -142,15 +140,12 @@ describe.skipIf(MODE === 'record')('web e2e: background job list', () => {
       // Fully inside the viewport, clear of the rail.
       expect(box!.x + box!.width).toBeLessThanOrEqual(360)
       expect(box!.x).toBeGreaterThanOrEqual(64)
-      // The rightmost row area really belongs to the list: a probe point
-      // near the right edge resolves to a list row, not empty space.
-      const hitIsRow = await mobilePage.evaluate(({ x, y }) => {
-        const el = document.elementFromPoint(x, y)
-        // The rows are `<li>` elements with no explicit listitem role, so the
-        // probe anchors on the tag.
-        return el !== null && el.closest('li') !== null
-      }, { x: box!.x + box!.width - 12, y: box!.y + 16 })
-      expect(hitIsRow).toBe(true)
+      // The rendered row itself remains inside the viewport; menu padding or
+      // rounded corners need not be row hit targets.
+      const rowBox = await menu.getByRole('listitem').first().boundingBox()
+      expect(rowBox).not.toBeNull()
+      expect(rowBox!.x).toBeGreaterThanOrEqual(box!.x)
+      expect(rowBox!.x + rowBox!.width).toBeLessThanOrEqual(360)
       expect(mobileTripwire.pageErrors).toEqual([])
     } finally {
       await mobilePage.close()

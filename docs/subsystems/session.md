@@ -735,7 +735,7 @@ The backends that consume this contract are on [persistence.md](persistence.md).
 
 ## Remote catalog and workspace opening
 
-`ModelCatalog` is the Host-generation model directory returned by `session/modelCatalog`: it carries the deployment default, routable provider ids, successful provider groups, and isolated provider failures. It is not derived from one Session and remains separate from Session projections.
+`ModelCatalog` is the Host-generation model directory returned by `session/modelCatalog`: it carries the deployment default, routable provider ids, successful provider groups, and isolated provider failures. It is not derived from one Session and remains separate from Session projections. `ProviderBalanceRequest` similarly names one provider without addressing a Session; `ProviderBalanceValue` contains an optional balance with its ISO currency code, total, topped-up, and granted amounts, and omits that value when the adapter exposes no available balance.
 
 `SessionOpenWorkspacePathRequest` carries an absolute or workspace-resolved `path`; optional `action: "reveal"` selects file-manager navigation instead of default-application opening. `SessionOpenWorkspacePathValue` confirms that the Host accepted the native handoff. A Session-aware Client resolves relative paths against its current Session cwd when known; the controller hands the path to the opener unchanged and reports invalid requests, cancellation, and opener failures through the Session Remote error vocabulary.
 
@@ -804,6 +804,14 @@ inspect( sessionId: SessionId, signal?: AbortSignal, ): Promise<SessionInspectio
  * @returns provider-grouped models, the deployment default, and isolated provider failures.
  */
 @Remote('modelCatalog') modelCatalog(): Promise<ModelCatalog>
+
+/**
+ * Query one provider account's balance without activating a Session.
+ * @param request - provider route whose owning adapter may expose a balance.
+ * @param signal - caller cancellation forwarded to the adapter.
+ * @returns the balance when supported and available.
+ */
+@Remote('providerBalance') async providerBalance(request: ProviderBalanceRequest, signal: AbortSignal): Promise<ProviderBalanceValue>
 
 /**
  * Report whether this deployment can hand a Session workspace path to a native desktop.

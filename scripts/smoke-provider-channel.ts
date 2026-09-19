@@ -34,6 +34,7 @@ import { parseArgs } from 'node:util'
 import { createAssistantMessage, createToolResultMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { ToolCallBlock, ToolSchema } from '@deepseek-ai/dsh-llm'
 import { PiAiAdapter } from '../packages/llm/llm-pi-ai/src/adapter.ts'
+import type { PiAiAuthInjection } from '../packages/llm/llm-pi-ai/src/adapter.ts'
 import { assertServiceable, Config, resolveProfiles } from '../packages/llm/llm-pi-ai/src/config.ts'
 import type { PiAiProviderProfile } from '../packages/llm/llm-pi-ai/src/config.ts'
 
@@ -159,6 +160,22 @@ function addToSettings(home: string, provider: string, block: string, fullSectio
   }
   writeFileSync(path, next)
   console.log(`smoke-provider-channel: wrote ${provider} into ${path} (hot-reloads, no restart)`)
+}
+
+/** Empty process-local auth plane; smoke requests supply their key directly. */
+function ephemeralAuth(): PiAiAuthInjection {
+  return {
+    credentials: {
+      read: () => Promise.resolve(undefined),
+      list: () => Promise.resolve([]),
+      modify: async (_providerId, mutate) => await mutate(undefined),
+      delete: () => Promise.resolve(),
+    },
+    authContext: {
+      env: () => Promise.resolve(undefined),
+      fileExists: () => Promise.resolve(false),
+    },
+  }
 }
 
 function addCredential(home: string, envName: string, key: string): void {
@@ -344,6 +361,7 @@ async function main(): Promise<void> {
   const adapter = new PiAiAdapter({
     profiles: () => profiles,
     resolveApiKey: () => Promise.resolve(apiKey),
+    auth: ephemeralAuth(),
   })
 
   console.log(`smoke-provider-channel: ${provider} -> ${values.api} ${values['base-url']} (model ${model})`)

@@ -791,6 +791,7 @@ describe('web e2e: long Chat scroll contract', () => {
       await loadEarlierWithAnchor(world.page)
       await wheelToHistoryStart(world.page)
       await wheelTranscript(world.page, 1_300)
+      const sessionAnchor = await visibleFlowAnchor(world.page)
 
       await world.page.getByRole('tab', { name: 'Trajectory', exact: true }).click()
       await world.page.getByLabel('Trajectory timeline').waitFor({ timeout: 30_000 })
@@ -817,17 +818,23 @@ describe('web e2e: long Chat scroll contract', () => {
       )
 
       const backToBottom = world.page.getByRole('button', { name: 'Back to bottom', exact: true })
-      await backToBottom.waitFor({ timeout: 15_000 })
-      await backToBottom.evaluate((button) => {
-        if (!(button instanceof HTMLElement)) throw new Error('Back-to-bottom control is not an HTML element')
-        button.click()
-        const trajectory = [...document.querySelectorAll<HTMLElement>('[role="tab"]')]
-          .find(tab => tab.textContent?.trim() === 'Trajectory')
-        if (!(trajectory instanceof HTMLElement)) {
-          throw new Error('Trajectory tab is unavailable during pinned remount')
-        }
-        trajectory.click()
-      })
+      await nextPaint(world.page)
+      if (await backToBottom.count() > 0) {
+        await backToBottom.evaluate((button) => {
+          if (!(button instanceof HTMLElement)) throw new Error('Back-to-bottom control is not an HTML element')
+          button.click()
+          const trajectory = [...document.querySelectorAll<HTMLElement>('[role="tab"]')]
+            .find(tab => tab.textContent?.trim() === 'Trajectory')
+          if (!(trajectory instanceof HTMLElement)) {
+            throw new Error('Trajectory tab is unavailable during pinned remount')
+          }
+          trajectory.click()
+        })
+      } else {
+        // A virtual-window restore may normalize directly to the floor. It is
+        // already pinned, so switch tabs without manufacturing a button click.
+        await world.page.getByRole('tab', { name: 'Trajectory', exact: true }).click()
+      }
       await world.page.getByLabel('Trajectory timeline').waitFor({ timeout: 30_000 })
       await world.page.getByRole('tab', { name: 'Chat', exact: true }).click()
       await expectBottom(world.page)

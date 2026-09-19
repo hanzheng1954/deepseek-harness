@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-This package renders the background-job surface of the Web GUI: a session-header action that opens a popover listing the jobs this session can see. It reads host-computed registry state through the runtime's `jobsBySession` mirror and issues no RPC of its own. The trigger appears only while the session has a running or stopping job, and its badge counts those live jobs; settled rows remain visible and de-emphasized only alongside live work. The last live job settling closes and unmounts the control, because the conversation's tool row owns the durable outcome. The model's view of the same jobs belongs to `dsh-tool-jobs`; this package is a read-only projection for the human.
+Web GUI sessions with live background jobs gain a header action that opens their visible job list. The runtime supplies host-computed `jobsBySession`; this package makes no RPC. The badge counts running and stopping jobs. Settled rows remain visible only while other work is live, then the final settlement closes and unmounts the control because the conversation's tool row owns the durable outcome. `dsh-tool-jobs` gives the model its separate view; this package is the human read-only projection.
 
 ## Table of Contents
 

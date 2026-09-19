@@ -532,7 +532,7 @@ describe('web e2e: navigation & panes over a rich seeded session', () => {
     const mobileTripwire = watchConsole(mobilePage)
     try {
       await mobilePage.setViewportSize({ width: 390, height: 844 })
-      await mobilePage.goto(scaffold.baseUrl, { waitUntil: 'load' })
+      await mobilePage.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
       await mobilePage.waitForSelector('[class*="frame"]', { timeout: 30_000 })
       // Rail search: drawer expands and the search box is live (visible + tabbable).
       await mobilePage.getByRole('button', { name: 'Search sessions' }).click()

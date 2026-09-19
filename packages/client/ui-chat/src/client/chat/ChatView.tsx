@@ -329,6 +329,8 @@ export function ChatView({
   const jumpRepageHeadRef = useRef<number | null>(null)
   const firstSeqRef = useRef<number | null>(null)
   const openedRef = useRef(false)
+  /** Pending semantic-restore retry while the virtual window materializes its anchor row. */
+  const restoreFrameRef = useRef<number | null>(null)
   const lastKeyRef = useRef<string | null>(null)
   const lastSteeringIdRef = useRef<string | null>(null)
   const lastSubmissionIdRef = useRef<string | null>(null)
@@ -391,6 +393,9 @@ export function ChatView({
   useEffect(() => () => {
     if (activeFrameRef.current !== null && typeof cancelAnimationFrame !== 'undefined') {
       cancelAnimationFrame(activeFrameRef.current)
+    }
+    if (restoreFrameRef.current !== null && typeof cancelAnimationFrame !== 'undefined') {
+      cancelAnimationFrame(restoreFrameRef.current)
     }
   }, [])
 
@@ -480,33 +485,42 @@ export function ChatView({
         toBottom(el)
       } else {
         el.scrollTop = saved.scrollTop
+        const publishRestoredPosition = (): void => {
+          observedTopRef.current = el.scrollTop
+          const isAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight <= FOLLOW_THRESHOLD + 1
+          atBottomRef.current = isAtBottom
+          setAtBottom(isAtBottom)
+          const normalized = isAtBottom ? null : scrollPosition(local, el)
+          if (isAtBottom) chatScroll.save(null)
+          else if (normalized !== null) chatScroll.save(normalized)
+        }
         const row = anchorElement(local, saved.anchorKey)
         if (row !== null) {
           el.scrollTop += flowTop(row, el) - saved.anchorTop
+          publishRestoredPosition()
         } else {
-          // The saved row may materialize after the first virtual window. Apply
-          // one correction after that window and its next measurement render.
-          let corrected = false
+          // The first virtual window can clamp saved.scrollTop to its temporary
+          // floor before the saved row exists. Preserve the anchor and reader
+          // ownership until a later window materializes it; treating that
+          // temporary floor as the live tail would erase the restoration.
+          observedTopRef.current = el.scrollTop
+          atBottomRef.current = false
+          setAtBottom(false)
+          let attemptsRemaining = 60
           const correct = (): void => {
-            if (corrected) return
+            restoreFrameRef.current = null
             const later = anchorElement(local, saved.anchorKey)
-            if (later === null) return
-            corrected = true
-            el.scrollTop += flowTop(later, el) - saved.anchorTop
-            observedTopRef.current = el.scrollTop
+            if (later !== null) {
+              el.scrollTop += flowTop(later, el) - saved.anchorTop
+              publishRestoredPosition()
+              return
+            }
+            attemptsRemaining -= 1
+            if (attemptsRemaining > 0) restoreFrameRef.current = requestAnimationFrame(correct)
           }
-          requestAnimationFrame(() => {
-            correct()
-            requestAnimationFrame(correct)
-          })
+          if (restoreFrameRef.current !== null) cancelAnimationFrame(restoreFrameRef.current)
+          restoreFrameRef.current = requestAnimationFrame(correct)
         }
-        observedTopRef.current = el.scrollTop
-        const isAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight <= FOLLOW_THRESHOLD + 1
-        atBottomRef.current = isAtBottom
-        setAtBottom(isAtBottom)
-        const normalized = isAtBottom ? null : scrollPosition(local, el)
-        if (isAtBottom) chatScroll.save(null)
-        else if (normalized !== null) chatScroll.save(normalized)
       }
       firstSeqRef.current = firstSeq
       lastKeyRef.current = lastKey
@@ -638,8 +652,21 @@ export function ChatView({
   // The ref starts null and is assigned every render, so the placeholder
   // initializer a function initial value would need never exists.
   const followRef = useRef<(() => void) | null>(null)
+  const followRetryFrameRef = useRef<number | null>(null)
+  useEffect(() => () => {
+    if (followRetryFrameRef.current !== null) cancelAnimationFrame(followRetryFrameRef.current)
+  }, [])
   followRef.current = () => {
-    if (scrollSamplePendingRef.current) return
+    if (scrollSamplePendingRef.current) {
+      // A programmatic scroll delivery can still be awaiting its ownership
+      // sample when ResizeObserver reports composer growth. Retry after that
+      // sample instead of losing the only resize notification.
+      followRetryFrameRef.current ??= requestAnimationFrame(() => {
+        followRetryFrameRef.current = null
+        followRef.current?.()
+      })
+      return
+    }
     const local = listRef.current
     if (local === null) return
     const el = scrollerOf(local)

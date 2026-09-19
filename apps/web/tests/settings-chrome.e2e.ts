@@ -194,7 +194,7 @@ describe('web e2e: settings modal and General preferences', () => {
     onTestFailed(() => saveFailureShot(mobilePage, 'web-e2e-settings-mobile'))
     const mobileTripwire = watchConsole(mobilePage)
     try {
-      await mobilePage.goto(scaffold.baseUrl, { waitUntil: 'load' })
+      await mobilePage.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
       await mobilePage.waitForSelector('[class*="frame"]', { timeout: 30_000 })
       // The rail trigger renders icon-only, so it has no text name; the
       // dialog-haspopup attribute is the shared trigger contract.

@@ -136,7 +136,7 @@ describe('web e2e: the composer model switch is the default for later sessions',
     onTestFailed(() => saveFailureShot(mobilePage, 'web-e2e-model-menu-mobile'))
     const mobileTripwire = watchConsole(mobilePage)
     try {
-      await mobilePage.goto(scaffold.baseUrl, { waitUntil: 'load' })
+      await mobilePage.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
       await mobilePage.waitForSelector('[class*="frame"]', { timeout: 30_000 })
       const trigger = mobilePage.getByRole('button', { name: /^选择模型/ })
       await trigger.waitFor({ timeout: 15_000 })

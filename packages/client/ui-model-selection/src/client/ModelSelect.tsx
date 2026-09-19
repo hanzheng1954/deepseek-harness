@@ -153,10 +153,11 @@ export function ModelSelect(
     ;(cell !== null && cell !== undefined && !cell.disabled ? cell : triggerRef.current)?.focus()
   }, [open, pane])
 
-  // Portaled placement (the Menu primitive's portal rules: fixed from the
+  // Portaled placement (the Menu primitive's portal rules: fixed from an
   // anchor rect, measured before paint, clamped inside the viewport): above
-  // the trigger, right edges aligned. Depends on pane and directory state
-  // because pane switches and async catalog loads resize the card.
+  // the trigger on ordinary widths, and above the composer card on phones so
+  // the collapsed sidebar rail cannot cover the menu. Depends on pane and
+  // directory state because pane switches and async catalog loads resize it.
   /* jscpd:ignore-start -- deliberate mirror of ui-primitives useAnchoredPosition:
      that hook only places from the anchor's LEFT edge, while this card aligns
      right edges (x = rect.right - width), so the measure-and-clamp plumbing repeats. */
@@ -164,7 +165,10 @@ export function ModelSelect(
     if (!open) { setMenuPos(null); return }
     const place = (): void => {
       /* v8 ignore next 2 -- the trigger ref is attached whenever the menu is open. */
-      const rect = triggerRef.current?.getBoundingClientRect()
+      const mobileAnchor = window.innerWidth <= 560
+        ? rootRef.current?.closest<HTMLElement>('[data-composer-card]')
+        : undefined
+      const rect = (mobileAnchor ?? triggerRef.current)?.getBoundingClientRect()
       if (rect === undefined) return
       const MARGIN = 12
       const lw = menuRef.current?.offsetWidth ?? 0

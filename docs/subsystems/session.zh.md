@@ -739,7 +739,7 @@ interface TurnEndReasonMap {
 
 ## Remote 目录与 workspace 打开
 
-`ModelCatalog` 是 `session/modelCatalog` 返回的 Host generation 模型目录：它携带部署默认值、可路由 provider id、成功的 provider 分组与相互隔离的 provider 失败。它不由某个 Session 派生，因此与 Session projection 分开保存。
+`ModelCatalog` 是 `session/modelCatalog` 返回的 Host generation 模型目录：它携带部署默认值、可路由 provider id、成功的 provider 分组与相互隔离的 provider 失败。它不由某个 Session 派生，因此与 Session projection 分开保存。`ProviderBalanceRequest` 同样只点名一个 provider 而不寻址 Session；`ProviderBalanceValue` 可选地包含币种 ISO 代码、总余额、充值余额与赠送余额，适配器没有可用余额能力时省略该值。
 
 `SessionOpenWorkspacePathRequest` 携带绝对路径或已按 workspace 解析的 `path`。`SessionOpenWorkspacePathValue` 确认 Host 已接受原生交接。Session-aware Client 会在已知当前 Session cwd 时据此解析相对路径；controller 将路径原样交给打开器，并通过 Session Remote 错误词汇表报告无效请求、取消与打开器失败。 可选的 `action: "reveal"` 选择文件管理器导航；省略时使用默认应用打开。
 
@@ -808,6 +808,14 @@ inspect( sessionId: SessionId, signal?: AbortSignal, ): Promise<SessionInspectio
  * @returns provider-grouped models, the deployment default, and isolated provider failures.
  */
 @Remote('modelCatalog') modelCatalog(): Promise<ModelCatalog>
+
+/**
+ * Query one provider account's balance without activating a Session.
+ * @param request - provider route whose owning adapter may expose a balance.
+ * @param signal - caller cancellation forwarded to the adapter.
+ * @returns the balance when supported and available.
+ */
+@Remote('providerBalance') async providerBalance(request: ProviderBalanceRequest, signal: AbortSignal): Promise<ProviderBalanceValue>
 
 /**
  * Report whether this deployment can hand a Session workspace path to a native desktop.
